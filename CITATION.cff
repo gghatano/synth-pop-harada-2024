@@ -1,0 +1,43 @@
+cff-version: 1.2.0
+title: synthpop-jp
+message: >-
+  If you use this software, please cite both the software itself and the
+  underlying methodological papers (Murata et al. 2017 and Harada 2024) as
+  listed in `preferred-citation` and `references`.
+type: software
+authors:
+  # TODO: 著者詳細要確認 (Phase 0 完了後にユーザー確認)
+  - family-names: Hatano
+    given-names: ""
+    email: adad.0405@gmail.com
+    alias: gghatano
+repository-code: "https://github.com/gghatano/synth-pop-harada-2024"
+url: "https://github.com/gghatano/synth-pop-harada-2024"
+version: 0.0.0-dev
+date-released: "2026-04-23"
+license: Apache-2.0
+keywords:
+  - synthetic-population
+  - simulated-annealing
+  - census
+  - privacy-evaluation
+  - japan
+  - e-stat
+preferred-citation:
+  # TODO: 著者詳細要確認 (Murata 2017 の共著者・巻号・DOI を Phase 0 完了後に確認)
+  type: article
+  title: "A Simulated Annealing-based approach for synthesizing population micro-data consistent with published aggregate tables"
+  authors:
+    - family-names: Murata
+      given-names: ""
+  year: 2017
+  # DOI: TODO (未確認)
+references:
+  # TODO: 著者詳細要確認 (Harada 2024 の正式タイトル・掲載誌・DOI)
+  - type: article
+    title: "Utility and disclosure risk evaluation of synthetic population micro-data (ARD framework)"
+    authors:
+      - family-names: Harada
+        given-names: ""
+    year: 2024
+    # DOI: TODO (未確認)
