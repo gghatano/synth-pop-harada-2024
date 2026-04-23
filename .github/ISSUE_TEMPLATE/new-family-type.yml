@@ -1,0 +1,55 @@
+name: 新 family_type の提案
+description: 既存 9 種以外の family_type を追加したいとき
+title: "[family_type] "
+labels: ["type:family-type"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        新しい family_type の追加提案です。統計出典・role テンプレート・検証データの 3 点を埋めてください。
+
+  - type: input
+    id: name
+    attributes:
+      label: family_type 名
+      description: "スネークケース推奨 (例: `single_parent_elderly`)"
+    validations:
+      required: true
+
+  - type: textarea
+    id: role_template
+    attributes:
+      label: role テンプレート
+      description: 想定される world_role / age range の最小構成。
+      placeholder: |
+        roles:
+          - role: head
+            age_range: [65, 100]
+          - role: child
+            age_range: [30, 65]
+    validations:
+      required: true
+
+  - type: textarea
+    id: statistics_source
+    attributes:
+      label: 統計の出典
+      description: 国勢調査の表番号、e-Stat API、研究論文など。
+    validations:
+      required: true
+
+  - type: textarea
+    id: validation_data
+    attributes:
+      label: 検証データ
+      description: sample_case にどんな検証ケースを足せばよいか。
+    validations:
+      required: false
+
+  - type: textarea
+    id: rationale
+    attributes:
+      label: 追加理由
+      description: どんな分析・政策検討に役立つか。
+    validations:
+      required: true

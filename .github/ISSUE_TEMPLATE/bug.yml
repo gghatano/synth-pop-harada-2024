@@ -1,0 +1,67 @@
+name: バグ報告 / Bug report
+description: 動作が期待と異なる場合の報告
+title: "[bug] "
+labels: ["type:bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        バグ報告をありがとうございます。再現に必要な情報を可能な範囲で記入してください。
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: 症状の要約
+      description: 何が起きているかを 1〜2 行で。
+      placeholder: 例) synthpop-jp quickstart が ValueError を送出する
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 再現手順
+      description: コマンド・入力・config ファイルなど、第三者が再現できる粒度で。
+      placeholder: |
+        1. `uv sync --frozen`
+        2. `uv run synthpop-jp quickstart`
+        3. 発生する例外の末尾 10 行を添付
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期待する挙動
+      description: 本来どうなってほしかったか。
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: 実際の挙動
+      description: ログ・スタックトレース・スクリーンショットを歓迎します。
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: 実行環境
+      description: OS、Python バージョン、synthpop-jp のバージョン、`uv --version` など
+      placeholder: |
+        - OS: macOS 14.5
+        - Python: 3.12.3
+        - synthpop-jp: 0.1.0
+        - uv: 0.4.0
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: 補足
+      description: 関連 Issue・回避策・調査済み内容など（任意）
+    validations:
+      required: false

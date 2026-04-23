@@ -1,0 +1,66 @@
+name: 新評価器の提案
+description: 新しい有用性・秘匿性評価指標を追加したいとき
+title: "[evaluator] "
+labels: ["type:evaluator"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        新しい評価器 (Evaluator / PrivacyMetric) の追加提案です。
+        指標定義・参考文献・既存との違いの 3 点を書いてください。
+
+  - type: input
+    id: name
+    attributes:
+      label: 評価器名
+      description: "スネークケース推奨 (例: `cap_marginal`)"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: layer
+    attributes:
+      label: 評価レイヤ
+      description: review-privacy.md の 3 層区分に従う。
+      options:
+        - utility (broad)
+        - utility (narrow)
+        - privacy (proxy)
+        - privacy (attribute_inference)
+        - privacy (mia)
+        - aggregate (21 statistics)
+        - other
+    validations:
+      required: true
+
+  - type: textarea
+    id: definition
+    attributes:
+      label: 指標定義
+      description: "数式や疑似コード。単位・範囲（例: 0〜1）も明記。"
+    validations:
+      required: true
+
+  - type: textarea
+    id: references
+    attributes:
+      label: 参考文献
+      description: 論文・書籍・既存実装の URL と引用情報。
+    validations:
+      required: true
+
+  - type: textarea
+    id: differences
+    attributes:
+      label: 既存との違い
+      description: synthpop-jp に既にある指標と比べた差分。
+    validations:
+      required: true
+
+  - type: textarea
+    id: known_biases
+    attributes:
+      label: 既知のバイアス / 制限
+      description: どんな条件でミスリードしうるか。
+    validations:
+      required: false
