@@ -1,0 +1,33 @@
+version: 2
+updates:
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      python-minor:
+        update-types: ["minor", "patch"]
+      python-major:
+        update-types: ["major"]
+    labels:
+      - "dependencies"
+      - "ecosystem:python"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      gha-all:
+        patterns: ["*"]
+    labels:
+      - "dependencies"
+      - "ecosystem:github-actions"
+    commit-message:
+      prefix: "ci"
+      include: "scope"
