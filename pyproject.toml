@@ -2,7 +2,8 @@
 name = "synthpop-jp"
 version = "0.0.0"
 description = "Murata 2017 SA-based synthetic population generator with Harada 2024 evaluation."
-requires-python = ">=3.11"
+readme = "README.md"
+requires-python = "==3.12.*"
 license = "Apache-2.0"
 authors = [{ name = "synthpop-jp contributors" }]
 keywords = [
@@ -19,7 +20,6 @@ classifiers = [
     "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering",
 ]
@@ -90,7 +90,7 @@ include = [
 # ---------------------------------------------------------------------------
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py312"
 src = ["src", "tests"]
 
 [tool.ruff.lint]
