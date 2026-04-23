@@ -7,5 +7,3 @@ individual modules are filled in during subsequent phases.
 """
 
 __version__ = "0.0.0"
-
-__all__ = ["__version__"]

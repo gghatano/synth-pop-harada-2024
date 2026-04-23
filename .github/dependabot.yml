@@ -5,6 +5,11 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
+    groups:
+      python-minor:
+        update-types: ["minor", "patch"]
+      python-major:
+        update-types: ["major"]
     labels:
       - "dependencies"
       - "ecosystem:python"
@@ -17,6 +22,9 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
+    groups:
+      gha-all:
+        patterns: ["*"]
     labels:
       - "dependencies"
       - "ecosystem:github-actions"

@@ -17,12 +17,8 @@ jobs:
         uses: astral-sh/setup-uv@v3
         with:
           enable-cache: true
-
-      - name: Install Python
-        run: uv python install 3.12
-
-      - name: Sync (frozen)
-        run: uv sync --frozen
+          cache-dependency-glob: "uv.lock"
+          python-version: "3.12"
 
       - name: Build wheel + sdist
         run: uv build

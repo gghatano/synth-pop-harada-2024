@@ -38,3 +38,7 @@ repos:
         language: system
         types: [python]
         pass_filenames: false
+        # Manual stage: opt-in via `pre-commit run --hook-stage manual pyright`.
+        # CI always runs pyright on every PR, so gating local commits on it is
+        # noise (2-10 s per commit) developers will eventually disable.
+        stages: [manual]

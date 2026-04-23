@@ -4,7 +4,11 @@ External packages register extensions through the entry-point groups declared
 in ``pyproject.toml`` (``synthpop_jp.evaluators``, ``synthpop_jp.transitions``,
 ``synthpop_jp.family_types``). The Phase 0 stubs below reserve the public API
 surface; the actual discovery and invocation is implemented in Phase 3+
-(see ``docs/reviews/review-oss.md`` 指摘5 and ``task-007.md``).
+(see ``docs/reviews/review-oss.md`` 指摘5).
+
+The in-process ``register_*`` functions below are meant to coexist with the
+entry-points declared in ``pyproject.toml``. Phase 3 will unify them so that
+both surfaces share a single lookup path; Phase 0 only reserves the API shape.
 """
 
 from __future__ import annotations

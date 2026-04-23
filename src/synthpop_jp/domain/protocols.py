@@ -7,13 +7,19 @@ implementation (``optimize/``) and pluggable extensions
 at registration time; strict type-level verification happens through
 pyright.
 
-See ``docs/reviews/review-python.md`` 指摘5 and ``task-007.md`` for the
-rationale.
+See ``docs/reviews/review-python.md`` 指摘5 for the rationale.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Literal, Protocol, runtime_checkable
+
+PrivacyLayer = Literal["proxy", "attribute_inference", "mia"]
+"""Evaluation layers for :class:`PrivacyMetric`.
+
+See ``docs/spec/metrics.md`` and ADR-0003 for why this boundary is enforced at
+the type level.
+"""
 
 if TYPE_CHECKING:
     import numpy as np
@@ -99,13 +105,13 @@ class PrivacyMetric(Protocol):
     ----------
     name : str
         Stable identifier used in ``metrics.json``.
-    layer : str
+    layer : PrivacyLayer
         One of ``"proxy"``, ``"attribute_inference"``, or ``"mia"``; see
         ``docs/reviews/review-privacy.md`` for the layer definitions.
     """
 
     name: str
-    layer: str
+    layer: PrivacyLayer
 
     def evaluate(
         self,
