@@ -1,0 +1,21 @@
+# git worktree 運用（docs/rules/git-worktree.md）
+gitworktree/
+
+# Python / uv（task-004 で拡張）
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# macOS / editors
+.DS_Store
+.idea/
+.vscode/
+
+# 実行出力（task-004 以降で整理）
+outputs/
+artifacts/
