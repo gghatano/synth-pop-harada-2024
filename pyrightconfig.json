@@ -1,7 +1,7 @@
 {
   "include": ["src", "tests"],
   "exclude": ["**/__pycache__", ".venv", "outputs", "artifacts", "paper_results/tmp"],
-  "pythonVersion": "3.11",
+  "pythonVersion": "3.12",
   "typeCheckingMode": "strict",
   "reportMissingTypeStubs": "warning",
   "reportMissingImports": "error",

@@ -99,7 +99,7 @@ spec 本文中の各節には、由来する論文を脚注または「§13.3 (a
 
 ### 6.1 開発言語・環境
 
-* **Python 3.11+**
+* **Python 3.12（固定）**。環境差異に起因するトラブルを避けるため単一バージョンに固定する（ADR-0005 参照）。
 * パッケージ管理: `uv`、lockfile (`uv.lock`) をコミットし CI は `uv sync --frozen` で再現する
 * **PyPI パッケージ名: `synthpop-jp`**
 * **import 名: `synthpop_jp`**
