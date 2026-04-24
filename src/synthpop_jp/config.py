@@ -25,7 +25,59 @@ from __future__ import annotations
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
+
+
+class AnnealingConfig(BaseModel):
+    """SA（シミュレーテッドアニーリング）の実行パラメータ設定.
+
+    ``Settings.annealing`` フィールドとして組み込む。
+
+    Attributes
+    ----------
+    T0 : float
+        初期温度。ExponentialCooling に渡す。デフォルト 100.0。
+    alpha : float
+        冷却率 (0 < alpha <= 1.0)。デフォルト 0.999。
+    max_iters : int
+        最大反復回数。0 以下は無制限（evals_per_agent で制御する）。
+        デフォルト 1_000_000。
+    evals_per_agent : int
+        1 person あたりの評価回数上限。0 以下は無効。
+        停止条件: iter >= evals_per_agent * n_persons。
+        デフォルト 1000。
+    target_threshold : float
+        この値以下になったら停止する（0.0 は無効）。デフォルト 0.0。
+    patience : int
+        best_score が改善しない反復数の上限。0 は無効。デフォルト 0。
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    T0: float = 100.0
+    alpha: float = 0.999
+    max_iters: int = 1_000_000
+    evals_per_agent: int = 1000
+    target_threshold: float = 0.0
+    patience: int = 0
+
+    @field_validator("T0")
+    @classmethod
+    def t0_positive(cls, v: float) -> float:
+        """T0 > 0 を検証する."""
+        if v <= 0.0:
+            msg = f"T0 は正の実数でなければなりません（T0={v}）"
+            raise ValueError(msg)
+        return v
+
+    @field_validator("alpha")
+    @classmethod
+    def alpha_range(cls, v: float) -> float:
+        """Alpha が (0, 1] の範囲内か検証する."""
+        if v <= 0.0 or v > 1.0:
+            msg = f"alpha は (0, 1] の範囲でなければなりません（alpha={v}）"
+            raise ValueError(msg)
+        return v
 
 
 class Settings(BaseModel):
@@ -50,6 +102,7 @@ class Settings(BaseModel):
     input_dir: Path
     output_dir: Path
     family_type_mapping: Path | None = None
+    annealing: AnnealingConfig = AnnealingConfig()
 
     @classmethod
     def from_yaml(cls, path: Path) -> Settings:
