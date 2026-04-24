@@ -53,9 +53,7 @@ def make_registries() -> tuple[FamilyTypeRegistry, RoleRegistry, SexRegistry]:
     return family_reg, role_reg, sex_reg
 
 
-def make_demo_by_age_sex(
-    *, uniform_count: int = 100
-) -> list[DemographicByAgeSexRow]:
+def make_demo_by_age_sex(*, uniform_count: int = 100) -> list[DemographicByAgeSexRow]:
     """age=0-100, sex=M/F の均一分布を返す."""
     rows: list[DemographicByAgeSexRow] = []
     for age in range(101):
@@ -103,9 +101,7 @@ def make_multi_household_arrays(
             Person(household_id=hh_id, role=role, sex=sex, age=age)  # type: ignore[arg-type]
             for role, sex, age in members
         ]
-        hh_list.append(
-            Household(household_id=hh_id, family_type=family_type, members=persons)
-        )
+        hh_list.append(Household(household_id=hh_id, family_type=family_type, members=persons))
     return PopulationArrays.from_households(hh_list, family_reg, role_reg, sex_reg)
 
 
@@ -274,11 +270,7 @@ class TestHardConstraintAge18:
         )
         rng = SeedRegistry(root=42).rng("sa_transition")
         transition = AgeChangeTransition(arrays=arrays, demo_by_age_sex=demo, rng=rng)
-        husband_idx = int(
-            np.where(
-                arrays.role == arrays._role_reg.id_of("husband")
-            )[0][0]
-        )
+        husband_idx = int(np.where(arrays.role == arrays.role_reg.id_of("husband"))[0][0])
         for _ in range(100):
             person_idx, new_age = transition.propose()
             if person_idx == husband_idx:
@@ -293,11 +285,7 @@ class TestHardConstraintAge18:
         )
         rng = SeedRegistry(root=42).rng("sa_transition")
         transition = AgeChangeTransition(arrays=arrays, demo_by_age_sex=demo, rng=rng)
-        wife_idx = int(
-            np.where(
-                arrays.role == arrays._role_reg.id_of("wife")
-            )[0][0]
-        )
+        wife_idx = int(np.where(arrays.role == arrays.role_reg.id_of("wife"))[0][0])
         for _ in range(100):
             person_idx, new_age = transition.propose()
             if person_idx == wife_idx:
@@ -316,11 +304,7 @@ class TestHardConstraintAge18:
         )
         rng = SeedRegistry(root=42).rng("sa_transition")
         transition = AgeChangeTransition(arrays=arrays, demo_by_age_sex=demo, rng=rng)
-        father_idx = int(
-            np.where(
-                arrays.role == arrays._role_reg.id_of("father")
-            )[0][0]
-        )
+        father_idx = int(np.where(arrays.role == arrays.role_reg.id_of("father"))[0][0])
         for _ in range(100):
             person_idx, new_age = transition.propose()
             if person_idx == father_idx:
@@ -349,11 +333,7 @@ class TestHardConstraintParentChild:
         )
         rng = SeedRegistry(root=42).rng("sa_transition")
         transition = AgeChangeTransition(arrays=arrays, demo_by_age_sex=demo, rng=rng)
-        father_idx = int(
-            np.where(
-                arrays.role == arrays._role_reg.id_of("father")
-            )[0][0]
-        )
+        father_idx = int(np.where(arrays.role == arrays.role_reg.id_of("father"))[0][0])
         min_father_age = child_age + 14
         for _ in range(100):
             person_idx, new_age = transition.propose()
@@ -376,11 +356,7 @@ class TestHardConstraintParentChild:
         )
         rng = SeedRegistry(root=42).rng("sa_transition")
         transition = AgeChangeTransition(arrays=arrays, demo_by_age_sex=demo, rng=rng)
-        mother_idx = int(
-            np.where(
-                arrays.role == arrays._role_reg.id_of("mother")
-            )[0][0]
-        )
+        mother_idx = int(np.where(arrays.role == arrays.role_reg.id_of("mother"))[0][0])
         min_mother_age = child_age + 14
         for _ in range(100):
             person_idx, new_age = transition.propose()
@@ -404,11 +380,7 @@ class TestHardConstraintParentChild:
         )
         rng = SeedRegistry(root=42).rng("sa_transition")
         transition = AgeChangeTransition(arrays=arrays, demo_by_age_sex=demo, rng=rng)
-        child_idx = int(
-            np.where(
-                arrays.role == arrays._role_reg.id_of("child")
-            )[0][0]
-        )
+        child_idx = int(np.where(arrays.role == arrays.role_reg.id_of("child"))[0][0])
         max_child_age = min(father_age, mother_age) - 14
         for _ in range(100):
             person_idx, new_age = transition.propose()
@@ -433,11 +405,7 @@ class TestHardConstraintParentChild:
         )
         rng = SeedRegistry(root=42).rng("sa_transition")
         transition = AgeChangeTransition(arrays=arrays, demo_by_age_sex=demo, rng=rng)
-        parent_idx = int(
-            np.where(
-                arrays.role == arrays._role_reg.id_of("parent")
-            )[0][0]
-        )
+        parent_idx = int(np.where(arrays.role == arrays.role_reg.id_of("parent"))[0][0])
         min_parent_age = child_age + 14
         hits = 0
         for _ in range(200):
@@ -492,21 +460,6 @@ class TestRetryAndTransitionError:
                 count=100,
             )
         ]
-        arrays = make_arrays_single_household(
-            family_type="couple_and_children",
-            members=[
-                ("father", "M", 50),
-                ("mother", "F", 48),
-                ("child", "F", 25),
-            ],
-        )
-        rng = SeedRegistry(root=42).rng("sa_transition")
-        transition = AgeChangeTransition(
-            arrays=arrays,
-            demo_by_age_sex=demo,
-            demo_ft_role=ft_role_rows,
-            rng=rng,
-        )
         # father だけを対象に propose を強制的に実行するため、
         # 単人配列で試みる（father のみの世帯）
         father_only_arrays = make_arrays_single_household(
@@ -523,10 +476,14 @@ class TestRetryAndTransitionError:
             demo_ft_role=ft_role_rows,
             rng=rng2,
         )
-        with pytest.raises(TransitionError):
+
+        def _exhaust_retries() -> None:
             # 最大 10 回 retry するので 20 回試行すれば必ず発生
             for _ in range(20):
                 transition2.propose()
+
+        with pytest.raises(TransitionError):
+            _exhaust_retries()
 
     def test_transition_error_is_raised(self) -> None:
         """TransitionError が Exception のサブクラスであること."""
@@ -555,9 +512,7 @@ class TestDeterminism:
 
         def run_sequence() -> list[tuple[int, int]]:
             rng = SeedRegistry(root=42).rng("sa_transition")
-            transition = AgeChangeTransition(
-                arrays=arrays, demo_by_age_sex=demo, rng=rng
-            )
+            transition = AgeChangeTransition(arrays=arrays, demo_by_age_sex=demo, rng=rng)
             return [transition.propose() for _ in range(100)]
 
         seq1 = run_sequence()
@@ -615,18 +570,16 @@ class TestStatisticalDistribution:
 
         # single は age=18-100 の均一分布（83 段階）
         # KS 検定: 離散一様分布 U(18, 100) との比較
-        def uniform_cdf(x: float) -> float:
-            """U(18, 100) の CDF."""
-            if x < 18:
-                return 0.0
-            if x >= 100:
-                return 1.0
-            return (x - 18 + 1) / (100 - 18 + 1)
+        def uniform_cdf(x: np.ndarray) -> np.ndarray:  # type: ignore[type-arg]
+            """U(18, 100) の CDF（vectorized）."""
+            x_arr = np.asarray(x, dtype=float)
+            mid = (x_arr - 18 + 1) / (100 - 18 + 1)
+            result_arr = np.where(x_arr < 18, 0.0, np.where(x_arr >= 100, 1.0, mid))
+            return result_arr
 
-        result = ks_1samp(sampled_ages, uniform_cdf)
-        assert result.pvalue > 0.01, (
-            f"KS 検定 p={result.pvalue:.4f} < 0.01: single の年齢分布が期待と乖離"
-        )
+        ks_result = ks_1samp(sampled_ages, uniform_cdf)
+        pvalue = float(ks_result.pvalue)  # type: ignore[union-attr]
+        assert pvalue > 0.01, f"KS 検定 p={pvalue:.4f} < 0.01: single の年齢分布が期待と乖離"
 
     def test_husband_age_distribution_only_ge_18(self) -> None:
         """husband の new_age が age>=18 の範囲のみから来ることを 1000 回で確認."""
@@ -637,9 +590,7 @@ class TestStatisticalDistribution:
         )
         rng = SeedRegistry(root=42).rng("sa_transition")
         transition = AgeChangeTransition(arrays=arrays, demo_by_age_sex=demo, rng=rng)
-        husband_idx = int(
-            np.where(arrays.role == arrays._role_reg.id_of("husband"))[0][0]
-        )
+        husband_idx = int(np.where(arrays.role == arrays.role_reg.id_of("husband"))[0][0])
         violations = 0
         trials = 0
         for _ in range(1000):
