@@ -162,7 +162,7 @@ class TestFromArrays:
                 for stat in objective.stats
             )
         )
-        assert objective.total_score == pytest.approx(expected, abs=1e-6)
+        assert abs(objective.total_score - expected) < 1e-6
 
     def test_male_pyramid_observed_sum_matches_male_persons(
         self, objective: ObjectiveState, sample_arrays: PopulationArrays
@@ -217,7 +217,7 @@ class TestProposeChangeNoSideEffect:
         """age を変えない propose_change の差分は 0 である."""
         current_age = int(objective.arrays.age[0])
         delta = objective.propose_change(0, current_age)
-        assert delta == pytest.approx(0.0, abs=1e-9)
+        assert abs(delta) < 1e-9
 
 
 # ---------------------------------------------------------------------------
@@ -236,7 +236,7 @@ class TestApplyChangeConsistency:
         delta = objective.propose_change(idx, new_age)
         objective.apply_change(idx, new_age)
         expected = before_score + delta
-        assert objective.total_score == pytest.approx(expected, abs=1e-6)
+        assert abs(objective.total_score - expected) < 1e-6
 
     def test_apply_change_updates_arrays_age(self, objective: ObjectiveState) -> None:
         """apply_change 後は arrays.age が new_age に更新されている."""
@@ -280,7 +280,7 @@ class TestApplyChangeReversibility:
         objective.apply_change(idx, new_age)
         objective.apply_change(idx, old_age)  # 元に戻す
 
-        assert objective.total_score == pytest.approx(original_score, abs=1e-6)
+        assert abs(objective.total_score - original_score) < 1e-6
 
     def test_apply_and_revert_restores_observed_histograms(self, objective: ObjectiveState) -> None:
         """apply → revert で全統計の observed が元に戻る."""
@@ -312,7 +312,7 @@ class TestApplyChangeReversibility:
             old_age = int(objective.arrays.age[i]) - 1  # apply 前の値
             objective.apply_change(i, old_age)
 
-        assert objective.total_score == pytest.approx(original_score, abs=1e-6)
+        assert abs(objective.total_score - original_score) < 1e-6
 
 
 # ---------------------------------------------------------------------------
@@ -362,7 +362,7 @@ class TestDifferentialUpdateEqualsFullRecompute:
         objective.arrays.age[idx] = np.int16(old_age)  # 元に戻す
 
         expected_delta = score_after_full - score_before
-        assert delta_differential == pytest.approx(expected_delta, abs=1e-6)
+        assert abs(delta_differential - expected_delta) < 1e-6
 
     @given(
         person_idx_frac=st.floats(min_value=0.0, max_value=1.0, allow_nan=False),
@@ -410,7 +410,7 @@ class TestDifferentialUpdateEqualsFullRecompute:
         obj.arrays.age[idx] = np.int16(old_age)  # 元に戻す
 
         expected_delta = score_after_full - score_before
-        assert delta_differential == pytest.approx(expected_delta, abs=1e-6), (
+        assert abs(delta_differential - expected_delta) < 1e-6, (
             f"idx={idx}, old_age={old_age}, new_age={new_age}: "
             f"differential={delta_differential:.6f}, full={expected_delta:.6f}"
         )
@@ -449,7 +449,7 @@ class TestDifferentialUpdateEqualsFullRecompute:
         obj.apply_change(idx, new_age)
         obj.apply_change(idx, old_age)
 
-        assert obj.total_score == pytest.approx(original_score, abs=1e-6), (
+        assert abs(obj.total_score - original_score) < 1e-6, (
             f"idx={idx}, old_age={old_age}, new_age={new_age}: "
             f"restored={obj.total_score:.6f}, original={original_score:.6f}"
         )
