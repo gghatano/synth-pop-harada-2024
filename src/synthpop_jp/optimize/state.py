@@ -108,6 +108,21 @@ class PopulationArrays:
         """配列が保持する person 数を返す."""
         return int(self.age.shape[0])
 
+    @property
+    def role_reg(self) -> RoleRegistry:
+        """役割 ↔ 整数 ID の Registry を返す."""
+        return self._role_reg
+
+    @property
+    def family_reg(self) -> FamilyTypeRegistry:
+        """家族類型 ↔ 整数 ID の Registry を返す."""
+        return self._family_reg
+
+    @property
+    def sex_reg(self) -> SexRegistry:
+        """性別 ↔ 整数 ID の Registry を返す."""
+        return self._sex_reg
+
     @classmethod
     def empty(
         cls,
