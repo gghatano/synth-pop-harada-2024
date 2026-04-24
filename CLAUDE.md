@@ -109,6 +109,7 @@ Claude Code は、これらを満たさない状態で作業を終えないこ�
 | TDD の進め方 | [`docs/rules/tdd.md`](docs/rules/tdd.md) |
 | worktree の使い方 | [`docs/rules/git-worktree.md`](docs/rules/git-worktree.md) |
 | ブランチ戦略 | [`docs/rules/branch-strategy.md`](docs/rules/branch-strategy.md) |
+| CI parity（push 前 4 コマンド） | [`docs/rules/ci-parity.md`](docs/rules/ci-parity.md) |
 | 実験管理 | [`docs/rules/experiment-management.md`](docs/rules/experiment-management.md) |
 | HTML レポート運用 | [`docs/rules/html-reporting.md`](docs/rules/html-reporting.md) |
 | 文章スタイル | [`docs/rules/documentation-style.md`](docs/rules/documentation-style.md) |
@@ -118,3 +119,4 @@ Claude Code は、これらを満たさない状態で作業を終えないこ�
 | 実験レポート雛形 | [`docs/templates/experiment_report.md`](docs/templates/experiment_report.md) |
 | レビューサマリ雛形 | [`docs/templates/review_summary.md`](docs/templates/review_summary.md) |
 | 標準フロー skill | [`.claude/skills/`](.claude/skills/) |
+| マルチエージェント運用 | [`.claude/skills/multi_agent_orchestration.md`](.claude/skills/multi_agent_orchestration.md) |
