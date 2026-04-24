@@ -1,0 +1,28 @@
+# family_type_mapping.yaml
+#
+# family_type（家族類型）から family_type_group（粗い分類）へのマッピング。
+# spec.md §8.1 で定義された 9 種類の family_type を 3 グループに分類する。
+#
+# family_type_group の定義:
+#   with_children    : 子どもがいる世帯（子ども人数分布の対象）
+#   without_children : 子どもがいない世帯
+#   single           : 単身世帯
+#
+# couple_diff 符号規則: couple_diff = husband_age - wife_age
+# （夫が年上なら正、妻が年上なら負。data_contract.md §4 参照）
+#
+# Phase 3 以降は registry.register_family_type(name, template) でも拡張できる。
+# 現時点では yaml を直接参照する。
+#
+# 参照: docs/spec/data_contract.md §5
+# バージョン: v0.1.0 (2026-04-24)
+
+single: single
+couple: without_children
+couple_and_children: with_children
+father_and_children: with_children
+mother_and_children: with_children
+couple_and_parents: without_children
+couple_and_a_parent: without_children
+couple_children_and_parents: with_children
+couple_children_and_a_parent: with_children
