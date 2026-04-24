@@ -128,3 +128,75 @@ Issue 完了前に以下を満たしていること:
 - [ ] 過去のバグ修正があれば回帰テストが追加されている
 - [ ] 全テストが green
 - [ ] カバレッジの抜けに意図があり、説明できる
+
+---
+
+## 9. pydantic ValidationError を引き出すテストの書き方
+
+pydantic v2 のモデルは `Literal[...]` などで引数型を絞っていることが多い。
+**不正な値を意図的に渡して `ValidationError` を引き出すテスト**では、直接呼び出しだと pyright strict が止めます。
+
+### アンチパターン（pyright 落ちる）
+
+```python
+def test_invalid_sex_rejected(self) -> None:
+    with pytest.raises(ValidationError):
+        DemographicByAgeSexRow(age=30, sex="X", count=100)  # "X" は Literal["M","F"] にない
+```
+
+`reportArgumentType` で pyright が落ちます（PR #17 で実際に発生）。
+
+### 正しいパターン
+
+```python
+def test_invalid_sex_rejected(self) -> None:
+    with pytest.raises(ValidationError):
+        DemographicByAgeSexRow.model_validate({"age": 30, "sex": "X", "count": 100})
+```
+
+`model_validate(dict)` 経由にすることで、pydantic 側のランタイムバリデーションを正規ルートで引き出せます。
+これはローダが CSV の 1 行を処理するパスと同じため、テストの意図にも忠実です。
+
+### 参考
+
+- 現行実装例: `tests/io/test_loaders.py` の `TestDemographicByAgeSexRowSchema`
+- 関連: PR #17 で pyright strict 対応として model_validate に統一
+
+---
+
+## 10. テストから repo root を参照する時のパス解決
+
+回帰テストなどで `scripts/` や `data/` を参照したくなったとき、`Path(__file__).parents[N]` の **固定 index は使わない**。
+
+### アンチパターン（worktree の有無で壊れる）
+
+```python
+_REPO_ROOT = Path(__file__).parents[4]   # worktree だと 4、CI の checkout だと 3
+```
+
+worktree 下では `gitworktree/feature-xxx/tests/regression/test_foo.py` なので `parents[4]` が repo root。
+一方 CI の checkout では `<repo>/tests/regression/test_foo.py` なので `parents[3]` が repo root。
+固定 index にすると片方で絶対に壊れます（PR #18 で実際に発生）。
+
+### 正しいパターン
+
+```python
+def _find_repo_root() -> Path:
+    """pyproject.toml を含む最近接の祖先を repo root とみなす."""
+    here = Path(__file__).resolve()
+    for parent in here.parents:
+        if (parent / "pyproject.toml").exists():
+            return parent
+    raise RuntimeError(f"pyproject.toml が {here} から辿れない階層に見つからない")
+
+
+_REPO_ROOT = _find_repo_root()
+_GENERATE_SCRIPT = _REPO_ROOT / "scripts" / "generate_sample_case.py"
+```
+
+マーカーファイル（`pyproject.toml`）を探索するので、worktree の階層数に依存しません。
+
+### 参考
+
+- 現行実装例: `tests/regression/test_determinism.py` の `_find_repo_root`
+- 関連: PR #18 で CI 専用の失敗として修正
