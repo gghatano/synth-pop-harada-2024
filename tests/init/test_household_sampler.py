@@ -17,20 +17,18 @@ from synthpop_jp.domain.family_types import (
     FamilyTypeTemplate,
     register_family_type,
 )
-from synthpop_jp.io.schemas import (
-    ChildrenCountDistRow,
-    FamilyTypeCountRow,
-    HouseholdSizeByFamilyTypeRow,
-)
 from synthpop_jp.init.household_sampler import (
-    HouseholdPlan,
     assign_children_counts,
     assign_household_counts,
     assign_household_sizes,
     expand_roles,
     largest_remainder,
 )
-
+from synthpop_jp.io.schemas import (
+    ChildrenCountDistRow,
+    FamilyTypeCountRow,
+    HouseholdSizeByFamilyTypeRow,
+)
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -56,11 +54,12 @@ def sample_ft_counts() -> list[FamilyTypeCountRow]:
 @pytest.fixture
 def sample_children_dist() -> list[ChildrenCountDistRow]:
     """with_children グループの children 数分布."""
+    grp = "with_children"
     return [
-        ChildrenCountDistRow(family_type_group="with_children", n_children=1, rate=0.5521436260921879),
-        ChildrenCountDistRow(family_type_group="with_children", n_children=2, rate=0.08511306995409623),
-        ChildrenCountDistRow(family_type_group="with_children", n_children=3, rate=0.3390559721921986),
-        ChildrenCountDistRow(family_type_group="with_children", n_children=4, rate=0.023687331761517265),
+        ChildrenCountDistRow(family_type_group=grp, n_children=1, rate=0.5521436260921879),
+        ChildrenCountDistRow(family_type_group=grp, n_children=2, rate=0.08511306995409623),
+        ChildrenCountDistRow(family_type_group=grp, n_children=3, rate=0.3390559721921986),
+        ChildrenCountDistRow(family_type_group=grp, n_children=4, rate=0.023687331761517265),
         ChildrenCountDistRow(family_type_group="without_children", n_children=0, rate=1.0),
         ChildrenCountDistRow(family_type_group="single", n_children=0, rate=1.0),
     ]
@@ -98,11 +97,21 @@ def sample_hh_sizes() -> list[HouseholdSizeByFamilyTypeRow]:
         HouseholdSizeByFamilyTypeRow(family_type="couple_and_parents", household_size=3, count=8),
         HouseholdSizeByFamilyTypeRow(family_type="couple_and_parents", household_size=4, count=12),
         HouseholdSizeByFamilyTypeRow(family_type="couple_and_a_parent", household_size=3, count=20),
-        HouseholdSizeByFamilyTypeRow(family_type="couple_children_and_parents", household_size=4, count=2),
-        HouseholdSizeByFamilyTypeRow(family_type="couple_children_and_parents", household_size=5, count=18),
-        HouseholdSizeByFamilyTypeRow(family_type="couple_children_and_parents", household_size=6, count=0),
-        HouseholdSizeByFamilyTypeRow(family_type="couple_children_and_a_parent", household_size=4, count=5),
-        HouseholdSizeByFamilyTypeRow(family_type="couple_children_and_a_parent", household_size=5, count=15),
+        HouseholdSizeByFamilyTypeRow(
+            family_type="couple_children_and_parents", household_size=4, count=2
+        ),
+        HouseholdSizeByFamilyTypeRow(
+            family_type="couple_children_and_parents", household_size=5, count=18
+        ),
+        HouseholdSizeByFamilyTypeRow(
+            family_type="couple_children_and_parents", household_size=6, count=0
+        ),
+        HouseholdSizeByFamilyTypeRow(
+            family_type="couple_children_and_a_parent", household_size=4, count=5
+        ),
+        HouseholdSizeByFamilyTypeRow(
+            family_type="couple_children_and_a_parent", household_size=5, count=15
+        ),
     ]
 
 
@@ -271,21 +280,35 @@ class TestLargestRemainder:
 class TestAssignHouseholdSizes:
     """Cycle 3: assign_household_sizes() のテスト."""
 
-    def test_size_distribution_matches_csv_exactly(
+    def test_size_distribution_matches_csv_proportionally(
         self,
         sample_ft_counts: list[FamilyTypeCountRow],
         sample_hh_sizes: list[HouseholdSizeByFamilyTypeRow],
     ) -> None:
-        """household_size_by_family_type.csv があるとき、分布が完全一致する."""
+        """household_size_by_family_type.csv があるとき、比率通りに割付される.
+
+        CSV の counts は比率を表すサンプル。実際の割付は family_type_counts の
+        総数（30 世帯）を CSV の比率で配分し、Largest Remainder で整数化する。
+        couple_and_children: CSV counts = [10, 2, 8] → rates = [0.5, 0.1, 0.4]
+        30 世帯なら floor=[15, 3, 12] となる。
+        """
+        import numpy as np
+
         hh_counts = assign_household_counts(sample_ft_counts)
         plans = assign_household_sizes(hh_counts, sample_hh_sizes)
 
-        # couple_and_children: total 30 世帯, size 3=10, 4=2, 5=8 → 比率 10:2:8
+        # couple_and_children: total 30 世帯, size 3=10, 4=2, 5=8 → 比率で配分
         cac_plans = [p for p in plans if p.family_type == "couple_and_children"]
         sizes = [p.household_size for p in cac_plans]
-        assert sizes.count(3) == 10
-        assert sizes.count(4) == 2
-        assert sizes.count(5) == 8
+        assert len(sizes) == 30  # 合計 30 世帯
+
+        # Largest Remainder で期待される配分を計算
+        raw = np.array([10.0, 2.0, 8.0])  # CSV counts for size 3, 4, 5
+        rates = raw / raw.sum()
+        expected = largest_remainder(rates, 30)
+        assert sizes.count(3) == expected[0]
+        assert sizes.count(4) == expected[1]
+        assert sizes.count(5) == expected[2]
 
     def test_total_households_preserved(
         self,
@@ -317,16 +340,55 @@ class TestAssignHouseholdSizes:
 class TestAssignChildrenCounts:
     """Cycle 4: assign_children_counts() のテスト."""
 
-    def test_children_count_distribution_matches_exactly(
+    def test_children_derived_from_household_size_mode_a(
         self,
         sample_ft_counts: list[FamilyTypeCountRow],
         sample_hh_sizes: list[HouseholdSizeByFamilyTypeRow],
         sample_children_dist: list[ChildrenCountDistRow],
         sample_family_type_mapping: dict[str, str],
     ) -> None:
-        """children 数分布が入力統計と完全一致する（Largest Remainder 保証）."""
+        """モード A: household_size から n_children が決定論的に導出される.
+
+        household_size_by_family_type.csv がある場合（モード A）は
+        n_children = household_size - base_size で計算される。
+        """
+        from synthpop_jp.domain.family_types import FAMILY_TEMPLATES
+
         hh_counts = assign_household_counts(sample_ft_counts)
         plans = assign_household_sizes(hh_counts, sample_hh_sizes)
+        plans_with_children = assign_children_counts(
+            plans, sample_children_dist, sample_family_type_mapping
+        )
+
+        with_children_fts = {
+            ft for ft, grp in sample_family_type_mapping.items() if grp == "with_children"
+        }
+
+        for p in plans_with_children:
+            if p.family_type in with_children_fts:
+                tmpl = FAMILY_TEMPLATES.get(p.family_type)
+                if tmpl is not None:
+                    expected_n_children = p.household_size - tmpl.base_size
+                    assert p.n_children == expected_n_children, (
+                        f"{p.family_type}: household_size={p.household_size}, "
+                        f"base_size={tmpl.base_size}, "
+                        f"expected n_children={expected_n_children}, got {p.n_children}"
+                    )
+
+    def test_children_count_distribution_matches_exactly_mode_b(
+        self,
+        sample_ft_counts: list[FamilyTypeCountRow],
+        sample_children_dist: list[ChildrenCountDistRow],
+        sample_family_type_mapping: dict[str, str],
+    ) -> None:
+        """モード B: household_size CSV なし、children 数分布が Largest Remainder と完全一致."""
+        from collections import Counter
+
+        import numpy as np
+
+        hh_counts = assign_household_counts(sample_ft_counts)
+        # CSV なし → モード B（base_size をデフォルトとして使用）
+        plans = assign_household_sizes(hh_counts, None)
         plans_with_children = assign_children_counts(
             plans, sample_children_dist, sample_family_type_mapping
         )
@@ -341,12 +403,7 @@ class TestAssignChildrenCounts:
         if total == 0:
             return
 
-        # 実際の分布
-        from collections import Counter
         actual_counts = Counter(p.n_children for p in hh_with_children)
-
-        # Largest Remainder で期待される分布を計算
-        import numpy as np
 
         group_rows = [r for r in sample_children_dist if r.family_type_group == "with_children"]
         rates = np.array([r.rate for r in group_rows])
