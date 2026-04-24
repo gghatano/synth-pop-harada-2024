@@ -1,0 +1,15 @@
+# synthpop-jp デフォルト設定ファイル
+#
+# synthpop-jp quickstart コマンドが使うデフォルト設定です。
+# 同梱の sample_case データを使い、outputs/quickstart/ に出力します。
+#
+# フィールドの詳細は src/synthpop_jp/config.py の Settings モデルを参照してください。
+
+# 乱数シード: 同じ seed なら出力が bitwise 一致で再現できます
+seed: 42
+
+# 入力 CSV ディレクトリ（family_type_counts.csv など）
+input_dir: data/sample_case
+
+# 出力ディレクトリ（synthetic_households.csv などが書き出されます）
+output_dir: outputs/quickstart

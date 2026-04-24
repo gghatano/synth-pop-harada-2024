@@ -50,14 +50,48 @@ uv run synthpop-jp --help
 
 ## 4. 30 秒 Quickstart
 
-**NOTE**: 本コマンドは Phase 1 実装後に動作します（現時点ではプレースホルダ）。
+同梱のダミーデータ（`data/sample_case/`）を使って、合成人口を 10 秒以内に生成できます。
 
 ```bash
-uvx synthpop-jp quickstart
-# → outputs/quickstart/ に synthetic_households.csv と synthetic_persons.csv が出力される
+# clone からすぐ試す場合
+git clone https://github.com/gghatano/synth-pop-harada-2024.git
+cd synth-pop-harada-2024
+uv sync --frozen
+uv run synthpop-jp quickstart
 ```
 
-`quickstart` は同梱の完全合成ダミー入力（`data/sample_case/`）を使い、10 秒程度で 1,000 世帯規模の合成人口を生成します。実データの準備は不要です。
+```bash
+# uvx でインストール不要で試す場合
+uvx --from git+https://github.com/gghatano/synth-pop-harada-2024.git synthpop-jp quickstart
+```
+
+実行すると `outputs/quickstart/` に 3 ファイルが生成されます:
+
+| ファイル | 内容 |
+|---|---|
+| `synthetic_households.csv` | 合成世帯（household_id, family_type, household_size） |
+| `synthetic_persons.csv` | 合成個人（person_id, household_id, family_type, role, sex, age） |
+| `metrics.json` | 集計メトリクス（総世帯数・総人数・family_type 別内訳など） |
+
+設定ファイルを事前に検証するには:
+
+```bash
+uv run synthpop-jp validate-config configs/base.yaml
+# ✓ Config is valid: configs/base.yaml
+```
+
+便利なオプション:
+
+```bash
+# シードを指定して実行（同じシードなら同じ結果が再現される）
+uv run synthpop-jp quickstart --seed 123
+
+# ファイル書き出しをスキップして動作確認のみ
+uv run synthpop-jp quickstart --dry-run
+
+# デバッグログを表示
+uv run synthpop-jp quickstart --log-level DEBUG
+```
 
 e-Stat からの実データ取得は `scripts/fetch_estat.py`（Phase 2 以降で提供予定）を使ってユーザー環境でダウンロードしてください。詳細は `DATASET.md`。
 
