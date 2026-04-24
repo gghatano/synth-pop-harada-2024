@@ -6,6 +6,7 @@ TDD Cycle 2: Person / Household モデルの基本バリデーション
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
 from synthpop_jp.domain.household import Household
 from synthpop_jp.domain.person import Person
@@ -24,17 +25,17 @@ class TestPerson:
 
     def test_sex_must_be_m_or_f(self) -> None:
         """sex は M か F のみ受け付ける."""
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             Person(household_id=1, role="wife", sex="X", age=30)  # type: ignore[arg-type]
 
     def test_age_cannot_be_negative(self) -> None:
         """年齢は 0 以上でなければならない."""
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             Person(household_id=1, role="child", sex="F", age=-1)
 
     def test_age_cannot_exceed_120(self) -> None:
         """年齢は 120 以下でなければならない."""
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             Person(household_id=1, role="husband", sex="M", age=121)
 
     def test_age_zero_is_valid(self) -> None:
@@ -68,11 +69,11 @@ class TestHousehold:
 
     def test_household_must_have_at_least_one_member(self) -> None:
         """世帯員が 0 人の世帯は拒否する."""
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             Household(household_id=3, family_type="single", members=[])
 
     def test_household_id_must_be_positive(self) -> None:
         """household_id は 1 以上でなければならない（0 は拒否）."""
         person = Person(household_id=1, role="single", sex="M", age=30)
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             Household(household_id=0, family_type="single", members=[person])
