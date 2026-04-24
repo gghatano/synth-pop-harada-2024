@@ -278,16 +278,279 @@ def quickstart(
 
 
 @app.command()
-def generate(config: str = "configs/base.yaml") -> None:
-    """Generate a synthetic population from ``config`` (Phase 2 onward).
+def generate(
+    config: Annotated[
+        Path | None,
+        typer.Option("--config", help="設定ファイルのパス。省略時は configs/base.yaml を使う。"),
+    ] = None,
+    seed: Annotated[
+        int | None,
+        typer.Option("--seed", help="乱数シード。指定すると config の seed を上書きする。"),
+    ] = None,
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run", help="ファイル書き出しをスキップして読み込みと SA のみ実行する。"
+        ),
+    ] = False,
+    log_level: Annotated[
+        LogLevel,
+        typer.Option("--log-level", help="ログレベル。"),
+    ] = LogLevel.INFO,
+) -> None:
+    """SA（シミュレーテッドアニーリング）最適化付きの合成人口生成.
 
-    Parameters
-    ----------
-    config : str
-        Path to a YAML configuration file.
+    ``quickstart`` の発展版。初期人口生成のあとに SA 最適化を実行し、
+    より目標統計に近い合成人口を出力する。
+
+    出力先: ``output_dir/synthetic_households.csv``,
+    ``synthetic_persons.csv``, ``metrics.json``（best_score 等を含む）。
     """
-    del config
-    _not_yet("generate", "Phase 2")
+    import csv
+    import json
+    from collections import Counter
+
+    from pydantic import ValidationError
+
+    from synthpop_jp.config import Settings
+    from synthpop_jp.init.initial_population import InitStats, generate_initial_population
+    from synthpop_jp.io.loaders import (
+        load_age_diff_couple,
+        load_age_diff_parent_child,
+        load_children_count_dist,
+        load_demographic_by_age_sex,
+        load_demographic_by_family_type_role,
+        load_family_type_counts,
+        load_family_type_mapping,
+        load_household_size_by_family_type,
+    )
+    from synthpop_jp.optimize.annealing import SARunner
+    from synthpop_jp.optimize.cooling import ExponentialCooling
+    from synthpop_jp.optimize.objective import ObjectiveState
+    from synthpop_jp.optimize.transitions import AgeChangeTransition
+    from synthpop_jp.rng import SeedRegistry
+
+    logging.basicConfig(level=getattr(logging, log_level.value))
+
+    # --- 設定ロード ---
+    if config is None:
+        config = _find_default_config()
+
+    console.print(f"[bold]設定ファイル:[/bold] {config}")
+
+    try:
+        settings = Settings.from_yaml(config)
+    except FileNotFoundError:
+        err_console.print(f"[red]エラー:[/red] 設定ファイルが見つかりません: {config}")
+        raise typer.Exit(code=1) from None
+    except ValidationError as exc:
+        err_console.print(f"[red]設定ファイルのバリデーションエラー:[/red]\n{exc}")
+        raise typer.Exit(code=1) from None
+
+    # seed の上書き
+    if seed is not None:
+        settings = settings.model_copy(update={"seed": seed})
+
+    input_dir = settings.input_dir
+    output_dir = settings.output_dir
+    annealing_cfg = settings.annealing
+
+    # 相対パスの解決
+    base_dir = _find_project_root(config)
+    if not input_dir.is_absolute():
+        input_dir = base_dir / input_dir
+    if not output_dir.is_absolute():
+        output_dir = base_dir / output_dir
+
+    console.print(f"[bold]入力ディレクトリ:[/bold] {input_dir}")
+    console.print(f"[bold]出力ディレクトリ:[/bold] {output_dir}")
+    console.print(f"[bold]seed:[/bold] {settings.seed}")
+
+    # --- family_type_mapping.yaml を探す ---
+    if settings.family_type_mapping is not None:
+        mapping_path = settings.family_type_mapping
+        if not mapping_path.is_absolute():
+            mapping_path = config.parent / mapping_path
+    else:
+        mapping_path = _find_family_type_mapping(config)
+
+    # --- CSV 読み込み ---
+    console.print("[bold]入力 CSV を読み込み中...[/bold]")
+
+    try:
+        family_type_counts = load_family_type_counts(input_dir / "family_type_counts.csv")
+        children_count_dist = load_children_count_dist(
+            input_dir / "children_count_dist.csv",
+            mapping_path=mapping_path,
+        )
+        demographic_by_age_sex = load_demographic_by_age_sex(
+            input_dir / "demographic_by_age_sex.csv"
+        )
+        family_type_mapping = load_family_type_mapping(mapping_path)
+
+        household_size_by_family_type = None
+        hh_size_path = input_dir / "household_size_by_family_type.csv"
+        if hh_size_path.exists():
+            household_size_by_family_type = load_household_size_by_family_type(hh_size_path)
+
+        demographic_by_family_type_role = None
+        demo_ft_role_path = input_dir / "demographic_by_family_type_role.csv"
+        if demo_ft_role_path.exists():
+            demographic_by_family_type_role = load_demographic_by_family_type_role(
+                demo_ft_role_path
+            )
+
+        age_diff_couple = load_age_diff_couple(input_dir / "age_diff_couple.csv")
+        age_diff_parent_child = load_age_diff_parent_child(input_dir / "age_diff_parent_child.csv")
+
+    except FileNotFoundError as exc:
+        err_console.print(f"[red]入力ファイルが見つかりません:[/red] {exc}")
+        raise typer.Exit(code=1) from None
+
+    console.print("[green]CSV 読み込み完了[/green]")
+
+    # --- 初期人口生成 ---
+    console.print("[bold]初期人口を生成中...[/bold]")
+
+    stats = InitStats(
+        family_type_counts=family_type_counts,
+        children_count_dist=children_count_dist,
+        demographic_by_age_sex=demographic_by_age_sex,
+        family_type_mapping=family_type_mapping,
+        household_size_by_family_type=household_size_by_family_type,
+        demographic_by_family_type_role=demographic_by_family_type_role,
+    )
+
+    seed_reg = SeedRegistry(root=settings.seed)
+    arrays = generate_initial_population(stats, seed_reg.rng("init"))
+
+    console.print(f"[green]初期人口生成完了:[/green] {arrays.n_persons} 人")
+
+    # --- ObjectiveState 構築 ---
+    console.print("[bold]目的スコアを初期化中...[/bold]")
+    objective = ObjectiveState.from_arrays(
+        arrays=arrays,
+        age_diff_parent_child=age_diff_parent_child,
+        age_diff_couple=age_diff_couple,
+        demographic_by_age_sex=demographic_by_age_sex,
+    )
+    initial_score = objective.total_score
+    console.print(f"[green]初期スコア:[/green] {initial_score:.1f}")
+
+    # --- SA 最適化 ---
+    console.print(
+        f"[bold]SA 最適化を実行中...[/bold] "
+        f"(T0={annealing_cfg.T0}, alpha={annealing_cfg.alpha}, "
+        f"evals_per_agent={annealing_cfg.evals_per_agent})"
+    )
+
+    transition = AgeChangeTransition(
+        arrays=arrays,
+        demo_by_age_sex=demographic_by_age_sex,
+        rng=seed_reg.rng("sa_transition"),
+        demo_ft_role=demographic_by_family_type_role,
+    )
+    cooling = ExponentialCooling(T0=annealing_cfg.T0, alpha=annealing_cfg.alpha)
+    runner_sa = SARunner(rng=seed_reg.rng("sa_runner"))
+
+    sa_result = runner_sa.run(
+        arrays=arrays,
+        objective=objective,
+        transition=transition,
+        cooling=cooling,
+        config=annealing_cfg,
+    )
+
+    best_score = sa_result.final_state.best_score
+    n_accepted = sa_result.final_state.n_accepted
+    n_total = sa_result.final_state.n_total
+    accept_rate = n_accepted / n_total if n_total > 0 else 0.0
+
+    console.print(
+        f"[green]SA 完了:[/green] best_score={best_score:.1f} "
+        f"(initial={initial_score:.1f}, "
+        f"improvement={100 * (1 - best_score / initial_score):.1f}%)"
+    )
+    console.print(f"  反復: {n_total}, 受理率: {accept_rate:.3f}")
+
+    # best_arrays から世帯リストを取得
+    best_households = sa_result.best_arrays.to_households()
+    n_households = len(best_households)
+    n_persons = sum(len(hh.members) for hh in best_households)
+
+    # --- メトリクス集計 ---
+    family_type_counter: Counter[str] = Counter()
+    size_counter: Counter[int] = Counter()
+    for hh in best_households:
+        family_type_counter[hh.family_type] += 1
+        size_counter[len(hh.members)] += 1
+
+    metrics: dict[str, object] = {
+        "total_households": n_households,
+        "total_persons": n_persons,
+        "initial_score": initial_score,
+        "best_score": best_score,
+        "improvement_rate": float(1 - best_score / initial_score) if initial_score > 0 else 0.0,
+        "n_accepted": n_accepted,
+        "n_total": n_total,
+        "accept_rate": accept_rate,
+        "family_type_counts": dict(family_type_counter),
+        "household_size_distribution": {str(k): v for k, v in sorted(size_counter.items())},
+    }
+
+    # --- dry-run ならここで終了 ---
+    if dry_run:
+        console.print("[yellow]--dry-run モード: ファイルを書き出しません[/yellow]")
+        return
+
+    # --- 出力ディレクトリ作成 ---
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # --- synthetic_households.csv 書き出し ---
+    hh_csv_path = output_dir / "synthetic_households.csv"
+    with hh_csv_path.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=["household_id", "family_type", "household_size"])
+        writer.writeheader()
+        for hh in best_households:
+            writer.writerow(
+                {
+                    "household_id": f"HH_{hh.household_id:06d}",
+                    "family_type": hh.family_type,
+                    "household_size": len(hh.members),
+                }
+            )
+
+    # --- synthetic_persons.csv 書き出し ---
+    persons_csv_path = output_dir / "synthetic_persons.csv"
+    person_id = 1
+    with persons_csv_path.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(
+            f, fieldnames=["person_id", "household_id", "family_type", "role", "sex", "age"]
+        )
+        writer.writeheader()
+        for hh in best_households:
+            for person in hh.members:
+                writer.writerow(
+                    {
+                        "person_id": f"P_{person_id:06d}",
+                        "household_id": f"HH_{hh.household_id:06d}",
+                        "family_type": hh.family_type,
+                        "role": person.role,
+                        "sex": person.sex,
+                        "age": person.age,
+                    }
+                )
+                person_id += 1
+
+    # --- metrics.json 書き出し ---
+    metrics_path = output_dir / "metrics.json"
+    with metrics_path.open("w", encoding="utf-8") as f:
+        json.dump(metrics, f, ensure_ascii=False, indent=2)
+
+    console.print(f"[green]出力完了:[/green] {output_dir}")
+    console.print(f"  {hh_csv_path.name}")
+    console.print(f"  {persons_csv_path.name}")
+    console.print(f"  {metrics_path.name}")
 
 
 @app.command()
