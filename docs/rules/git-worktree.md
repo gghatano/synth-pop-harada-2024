@@ -81,6 +81,49 @@ git worktree prune
 
 ---
 
+## 3.5. PR merge 時の定型フロー
+
+PR がマージされたら、以下を **この順番で** 実行します（`.claude/skills/4_create_pr.md` §7-8 と整合）。
+
+```bash
+# 1. PR を Ready に切り替え（Draft で作成した場合）
+gh pr ready <PR 番号>
+
+# 2. squash merge + リモート feature ブランチ削除
+gh pr merge <PR 番号> --squash --delete-branch
+#    → ローカル worktree が使用中の feature ブランチはローカル削除が失敗するが、
+#      リモート側は消える。続けて worktree を片付ける。
+
+# 3. worktree とローカルブランチを削除
+cd <repo_root>
+git worktree remove gitworktree/feature-<issue番号>-<keyword>
+git branch -D feature/<issue番号>-<keyword>
+#    → ローカル未 merge 警告が出るが、リモートが squash merge 済なので -D で強制削除してよい
+
+# 4. develop を最新化
+git checkout develop
+git pull --ff-only
+```
+
+### よくある失敗
+
+| 失敗 | 回避策 |
+|---|---|
+| `gh pr merge --delete-branch` が「worktree で使用中」で落ちる | 先に Ready → merge、リモート側だけ消す。ローカル worktree は手順 3 で改めて削除 |
+| `cd gitworktree/...` したまま `git worktree remove` して cwd が消失 | 削除前に `cd <repo_root>` で抜ける。`pwd` で確認する習慣 |
+| Draft PR を `gh pr merge` で実行するとエラー | 先に `gh pr ready` を叩く（Draft は自動で Ready にならない） |
+| 片付け忘れた worktree が溜まる | `git worktree list` で定期的に確認。PR merged の worktree は即削除 |
+
+### 並列 PR merge の順序
+
+並列で複数 PR が緑になったときは、以下の順で 1 つずつ merge:
+
+1. 依存関係が少ない PR から merge（他 PR の base が古くなる波及を最小化）
+2. 1 つ merge したら次の PR で `gh pr view <N> --json mergeable` を確認（`MERGEABLE / CLEAN` なら進む、`CONFLICTING` なら rebase 必要）
+3. 基本的に CI 再ランは **1 回だけ** 許容、それで赤なら手元で原因調査
+
+---
+
 ## 4. 複数 Issue を並行で扱うときの注意
 
 - 実験出力は **worktree 内の `experiments/` に置き、ブランチごとに分離** する。他ブランチの実験結果を参照したい場合は該当 worktree に移動するか、HTML レポートを見る
