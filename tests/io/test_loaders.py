@@ -204,7 +204,7 @@ class TestFamilyTypeMapping:
 class TestChildrenCountDistRowSchema:
     def test_valid_row(self) -> None:
         row = ChildrenCountDistRow(family_type_group="with_children", n_children=2, rate=0.3)
-        assert row.rate == pytest.approx(0.3)
+        assert row.rate == 0.3
 
     def test_negative_n_children_rejected(self) -> None:
         with pytest.raises(ValidationError):
@@ -265,7 +265,7 @@ class TestDemographicByAgeSexRowSchema:
 
     def test_invalid_sex_rejected(self) -> None:
         with pytest.raises(ValidationError):
-            DemographicByAgeSexRow(age=30, sex="X", count=100)
+            DemographicByAgeSexRow.model_validate({"age": 30, "sex": "X", "count": 100})
 
     def test_negative_age_rejected(self) -> None:
         with pytest.raises(ValidationError):
@@ -317,7 +317,9 @@ class TestAgeDiffParentChildRowSchema:
 
     def test_invalid_role_rejected(self) -> None:
         with pytest.raises(ValidationError):
-            AgeDiffParentChildRow(role="husband", diff_min=20, diff_max=30, count=50)
+            AgeDiffParentChildRow.model_validate(
+                {"role": "husband", "diff_min": 20, "diff_max": 30, "count": 50}
+            )
 
 
 class TestLoadAgeDiffParentChild:
@@ -397,8 +399,8 @@ class TestDemographicByFamilyTypeRoleRowSchema:
 
     def test_invalid_sex_rejected(self) -> None:
         with pytest.raises(ValidationError):
-            DemographicByFamilyTypeRoleRow(
-                family_type="couple", role="husband", sex="Z", age=40, count=10
+            DemographicByFamilyTypeRoleRow.model_validate(
+                {"family_type": "couple", "role": "husband", "sex": "Z", "age": 40, "count": 10}
             )
 
 
