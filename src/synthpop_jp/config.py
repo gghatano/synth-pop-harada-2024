@@ -50,6 +50,11 @@ class AnnealingConfig(BaseModel):
         この値以下になったら停止する（0.0 は無効）。デフォルト 0.0。
     patience : int
         best_score が改善しない反復数の上限。0 は無効。デフォルト 0。
+    log_every_n_iters : int
+        trace.jsonl および rich 進捗バーの更新頻度（反復数）。デフォルト 1000。
+    trace_enabled : bool
+        True のとき trace.jsonl を書き出す。False のとき trace を書き出さない。
+        デフォルト True。
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -60,6 +65,8 @@ class AnnealingConfig(BaseModel):
     evals_per_agent: int = 1000
     target_threshold: float = 0.0
     patience: int = 0
+    log_every_n_iters: int = 1000
+    trace_enabled: bool = True
 
     @field_validator("T0")
     @classmethod
