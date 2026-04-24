@@ -1,0 +1,17 @@
+role,diff_min,diff_max,count
+father,15,20,3
+father,20,25,18
+father,25,30,28
+father,30,35,29
+father,35,40,2
+father,40,45,0
+father,45,50,0
+father,50,55,0
+mother,15,20,5
+mother,20,25,18
+mother,25,30,27
+mother,30,35,27
+mother,35,40,3
+mother,40,45,0
+mother,45,50,0
+mother,50,55,0
