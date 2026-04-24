@@ -1,15 +1,24 @@
 """Command line interface for synthpop-jp.
 
-The CLI exposes six subcommands. All of them report a friendly not-yet-wired
-status in Phase 0 and exit non-zero; the concrete behaviour is implemented
-during later phases (see ``docs/reviews/action-plan.md`` §3).
+Phase 1 で実装するサブコマンド:
+- ``quickstart``: sample_case からの端末 1 発合成人口生成
+- ``validate-config``: config.yaml の事前バリデーション
+
+Phase 2 以降は ``generate`` / ``evaluate`` / ``improve`` / ``compare`` を実装する。
 """
 
 from __future__ import annotations
 
-from typing import NoReturn
+import logging
+from enum import Enum
+from pathlib import Path
+from typing import Annotated, NoReturn, Optional
 
 import typer
+from rich.console import Console
+
+console = Console()
+err_console = Console(stderr=True)
 
 app: typer.Typer = typer.Typer(
     name="synthpop-jp",
@@ -17,6 +26,15 @@ app: typer.Typer = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
 )
+
+
+class LogLevel(str, Enum):
+    """ログレベルの選択肢."""
+
+    DEBUG = "DEBUG"
+    INFO = "INFO"
+    WARNING = "WARNING"
+    ERROR = "ERROR"
 
 
 def _not_yet(command: str, phase: str) -> NoReturn:
@@ -35,14 +53,225 @@ def _not_yet(command: str, phase: str) -> NoReturn:
 
 
 @app.command()
-def quickstart() -> None:
-    """Run a 10-second sample_case synthesis (implemented in Phase 1)."""
-    _not_yet("quickstart", "Phase 1")
+def quickstart(
+    config: Annotated[
+        Optional[Path],
+        typer.Option("--config", help="設定ファイルのパス。省略時は configs/base.yaml を使う。"),
+    ] = None,
+    seed: Annotated[
+        Optional[int],
+        typer.Option("--seed", help="乱数シード。指定すると config の seed を上書きする。"),
+    ] = None,
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", help="ファイル書き出しをスキップして読み込みと生成のみ実行する。"),
+    ] = False,
+    log_level: Annotated[
+        LogLevel,
+        typer.Option("--log-level", help="ログレベル。"),
+    ] = LogLevel.INFO,
+) -> None:
+    """sample_case からの端末 1 発合成人口生成.
+
+    ``data/sample_case/`` に同梱のダミー入力 CSV を読み込み、
+    ``outputs/quickstart/`` に ``synthetic_households.csv``,
+    ``synthetic_persons.csv``, ``metrics.json`` を出力する。
+
+    10 秒以内に完走することを目標とする。
+    """
+    import csv
+    import json
+    from collections import Counter
+
+    from pydantic import ValidationError
+
+    from synthpop_jp.config import Settings
+    from synthpop_jp.init.initial_population import InitStats, generate_initial_population
+    from synthpop_jp.io.loaders import (
+        load_age_diff_couple,
+        load_age_diff_parent_child,
+        load_children_count_dist,
+        load_demographic_by_age_sex,
+        load_demographic_by_family_type_role,
+        load_family_type_counts,
+        load_family_type_mapping,
+        load_household_size_by_family_type,
+    )
+    from synthpop_jp.rng import SeedRegistry
+
+    logging.basicConfig(level=getattr(logging, log_level.value))
+
+    # --- 設定ロード ---
+    if config is None:
+        # pyproject.toml が置かれているリポジトリルートを起点に探す
+        config = _find_default_config()
+
+    console.print(f"[bold]設定ファイル:[/bold] {config}")
+
+    try:
+        settings = Settings.from_yaml(config)
+    except FileNotFoundError:
+        err_console.print(f"[red]エラー:[/red] 設定ファイルが見つかりません: {config}")
+        raise typer.Exit(code=1) from None
+    except ValidationError as exc:
+        err_console.print(f"[red]設定ファイルのバリデーションエラー:[/red]\n{exc}")
+        raise typer.Exit(code=1) from None
+
+    # seed の上書き
+    if seed is not None:
+        settings = settings.model_copy(update={"seed": seed})
+
+    input_dir = settings.input_dir
+    output_dir = settings.output_dir
+
+    # input_dir が相対パスの場合は config ファイルの親ディレクトリを基準に解決
+    if not input_dir.is_absolute():
+        input_dir = config.parent / input_dir
+    if not output_dir.is_absolute():
+        output_dir = config.parent / output_dir
+
+    console.print(f"[bold]入力ディレクトリ:[/bold] {input_dir}")
+    console.print(f"[bold]出力ディレクトリ:[/bold] {output_dir}")
+    console.print(f"[bold]seed:[/bold] {settings.seed}")
+
+    # --- family_type_mapping.yaml を探す ---
+    mapping_path = _find_family_type_mapping(config)
+
+    # --- CSV 読み込み ---
+    console.print("[bold]入力 CSV を読み込み中...[/bold]")
+
+    try:
+        family_type_counts = load_family_type_counts(input_dir / "family_type_counts.csv")
+        children_count_dist = load_children_count_dist(
+            input_dir / "children_count_dist.csv",
+            mapping_path=mapping_path,
+        )
+        demographic_by_age_sex = load_demographic_by_age_sex(
+            input_dir / "demographic_by_age_sex.csv"
+        )
+        family_type_mapping = load_family_type_mapping(mapping_path)
+
+        # 任意 CSV
+        household_size_by_family_type = None
+        hh_size_path = input_dir / "household_size_by_family_type.csv"
+        if hh_size_path.exists():
+            household_size_by_family_type = load_household_size_by_family_type(hh_size_path)
+
+        demographic_by_family_type_role = None
+        demo_ft_role_path = input_dir / "demographic_by_family_type_role.csv"
+        if demo_ft_role_path.exists():
+            demographic_by_family_type_role = load_demographic_by_family_type_role(
+                demo_ft_role_path
+            )
+
+        # age_diff_couple / age_diff_parent_child は読み込むが InitStats では使わない
+        # （Phase 2 の SA で使用）
+        _age_diff_couple = load_age_diff_couple(input_dir / "age_diff_couple.csv")
+        _age_diff_parent_child = load_age_diff_parent_child(
+            input_dir / "age_diff_parent_child.csv"
+        )
+        del _age_diff_couple, _age_diff_parent_child
+
+    except FileNotFoundError as exc:
+        err_console.print(f"[red]入力ファイルが見つかりません:[/red] {exc}")
+        raise typer.Exit(code=1) from None
+
+    console.print("[green]CSV 読み込み完了[/green]")
+
+    # --- 初期人口生成 ---
+    console.print("[bold]初期人口を生成中...[/bold]")
+
+    stats = InitStats(
+        family_type_counts=family_type_counts,
+        children_count_dist=children_count_dist,
+        demographic_by_age_sex=demographic_by_age_sex,
+        family_type_mapping=family_type_mapping,
+        household_size_by_family_type=household_size_by_family_type,
+        demographic_by_family_type_role=demographic_by_family_type_role,
+    )
+
+    rng = SeedRegistry(root=settings.seed).rng("init")
+    arrays = generate_initial_population(stats, rng)
+    households = arrays.to_households()
+
+    n_households = len(households)
+    n_persons = sum(len(hh.members) for hh in households)
+
+    console.print(f"[green]生成完了:[/green] {n_households} 世帯 / {n_persons} 人")
+
+    # --- メトリクス集計 ---
+    family_type_counter: Counter[str] = Counter()
+    size_counter: Counter[int] = Counter()
+
+    for hh in households:
+        family_type_counter[hh.family_type] += 1
+        size_counter[len(hh.members)] += 1
+
+    metrics: dict[str, object] = {
+        "total_households": n_households,
+        "total_persons": n_persons,
+        "family_type_counts": dict(family_type_counter),
+        "household_size_distribution": {str(k): v for k, v in sorted(size_counter.items())},
+    }
+
+    # --- dry-run ならここで終了 ---
+    if dry_run:
+        console.print("[yellow]--dry-run モード: ファイルを書き出しません[/yellow]")
+        return
+
+    # --- 出力ディレクトリ作成 ---
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # --- synthetic_households.csv 書き出し ---
+    hh_csv_path = output_dir / "synthetic_households.csv"
+    with hh_csv_path.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=["household_id", "family_type", "household_size"])
+        writer.writeheader()
+        for hh in households:
+            writer.writerow(
+                {
+                    "household_id": f"HH_{hh.household_id:06d}",
+                    "family_type": hh.family_type,
+                    "household_size": len(hh.members),
+                }
+            )
+
+    # --- synthetic_persons.csv 書き出し ---
+    persons_csv_path = output_dir / "synthetic_persons.csv"
+    person_id = 1
+    with persons_csv_path.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(
+            f, fieldnames=["person_id", "household_id", "family_type", "role", "sex", "age"]
+        )
+        writer.writeheader()
+        for hh in households:
+            for person in hh.members:
+                writer.writerow(
+                    {
+                        "person_id": f"P_{person_id:06d}",
+                        "household_id": f"HH_{hh.household_id:06d}",
+                        "family_type": hh.family_type,
+                        "role": person.role,
+                        "sex": person.sex,
+                        "age": person.age,
+                    }
+                )
+                person_id += 1
+
+    # --- metrics.json 書き出し ---
+    metrics_path = output_dir / "metrics.json"
+    with metrics_path.open("w", encoding="utf-8") as f:
+        json.dump(metrics, f, ensure_ascii=False, indent=2)
+
+    console.print(f"[green]出力完了:[/green] {output_dir}")
+    console.print(f"  {hh_csv_path.name}")
+    console.print(f"  {persons_csv_path.name}")
+    console.print(f"  {metrics_path.name}")
 
 
 @app.command()
 def generate(config: str = "configs/base.yaml") -> None:
-    """Generate a synthetic population from ``config`` (Phase 1 onward).
+    """Generate a synthetic population from ``config`` (Phase 2 onward).
 
     Parameters
     ----------
@@ -50,7 +279,7 @@ def generate(config: str = "configs/base.yaml") -> None:
         Path to a YAML configuration file.
     """
     del config
-    _not_yet("generate", "Phase 1")
+    _not_yet("generate", "Phase 2")
 
 
 @app.command()
@@ -95,17 +324,92 @@ def compare(experiment: str) -> None:
 
 
 @app.command("validate-config")
-def validate_config(config: str) -> None:
-    """Validate a configuration file without running a full generation.
+def validate_config(
+    config: Annotated[Path, typer.Argument(help="バリデーション対象の YAML 設定ファイルのパス。")],
+) -> None:
+    """設定ファイルの事前バリデーションを実行する.
+
+    pydantic モデルで config.yaml を検証し、有効なら exit 0 + 成功メッセージ、
+    不正なら exit 1 + エラー詳細を表示する。
+    """
+    from pydantic import ValidationError
+
+    from synthpop_jp.config import Settings
+
+    try:
+        Settings.from_yaml(config)
+    except FileNotFoundError:
+        err_console.print(f"[red]エラー:[/red] 設定ファイルが見つかりません: {config}")
+        raise typer.Exit(code=1) from None
+    except ValidationError as exc:
+        err_console.print(f"[red]ValidationError:[/red]\n{exc}")
+        raise typer.Exit(code=1) from None
+
+    console.print(f"[green]✓ Config is valid:[/green] {config}")
+
+
+def _find_default_config() -> Path:
+    """デフォルト設定ファイルを探して返す.
+
+    呼び出し時のカレントディレクトリ、または pyproject.toml が見つかる
+    ディレクトリの ``configs/base.yaml`` を返す。
+
+    Returns
+    -------
+    Path
+        デフォルト設定ファイルのパス（存在しない場合も Path を返す）。
+    """
+    # カレントディレクトリから探索
+    cwd = Path.cwd()
+    candidate = cwd / "configs" / "base.yaml"
+    if candidate.exists():
+        return candidate
+
+    # pyproject.toml が見つかる親ディレクトリまで遡る
+    for parent in cwd.parents:
+        if (parent / "pyproject.toml").exists():
+            candidate = parent / "configs" / "base.yaml"
+            if candidate.exists():
+                return candidate
+
+    return cwd / "configs" / "base.yaml"
+
+
+def _find_family_type_mapping(config_path: Path) -> Path:
+    """family_type_mapping.yaml を探して返す.
+
+    config ファイルの親ディレクトリから ``configs/family_type_mapping.yaml`` を探す。
 
     Parameters
     ----------
-    config : str
-        Path to a YAML configuration file.
+    config_path : Path
+        設定ファイルのパス。
+
+    Returns
+    -------
+    Path
+        family_type_mapping.yaml のパス。
     """
-    del config
-    _not_yet("validate-config", "Phase 1")
+    # config の親ディレクトリの sibling として探す
+    configs_dir = config_path.parent
+    candidate = configs_dir / "family_type_mapping.yaml"
+    if candidate.exists():
+        return candidate
+
+    # pyproject.toml が見つかる親ディレクトリから探す
+    for parent in config_path.parents:
+        if (parent / "pyproject.toml").exists():
+            candidate = parent / "configs" / "family_type_mapping.yaml"
+            if candidate.exists():
+                return candidate
+
+    return configs_dir / "family_type_mapping.yaml"
 
 
-if __name__ == "__main__":  # pragma: no cover
+def main() -> None:
+    """CLI エントリポイント.
+
+    ``pyproject.toml`` の ``[project.scripts]`` で
+    ``synthpop-jp = "synthpop_jp.cli:main"`` として登録する。
+    """
     app()
