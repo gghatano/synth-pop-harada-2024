@@ -12,10 +12,11 @@ TDD サイクル:
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TypedDict
 
 import numpy as np
 import pytest
-from hypothesis import given, settings
+from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
 from synthpop_jp.init.initial_population import InitStats, generate_initial_population
@@ -29,9 +30,22 @@ from synthpop_jp.io.loaders import (
     load_family_type_mapping,
     load_household_size_by_family_type,
 )
-from synthpop_jp.optimize.objective import ObjectiveState, build_objective_stats
+from synthpop_jp.io.schemas import (
+    AgeDiffCoupleRow,
+    AgeDiffParentChildRow,
+    DemographicByAgeSexRow,
+)
+from synthpop_jp.optimize.objective import ObjectiveState
 from synthpop_jp.optimize.state import PopulationArrays
 from synthpop_jp.rng import SeedRegistry
+
+
+class ObjectiveInput(TypedDict):
+    """ObjectiveState 構築に必要な統計テーブルをまとめた型."""
+
+    age_diff_parent_child: list[AgeDiffParentChildRow]
+    age_diff_couple: list[AgeDiffCoupleRow]
+    demographic_by_age_sex: list[DemographicByAgeSexRow]
 
 
 # ---------------------------------------------------------------------------
@@ -90,19 +104,17 @@ def sample_arrays(sample_stats: InitStats, rng: np.random.Generator) -> Populati
 
 
 @pytest.fixture
-def objective_input(sample_stats: InitStats):
+def objective_input(sample_stats: InitStats) -> ObjectiveInput:
     """ObjectiveState 構築に必要な統計テーブルをまとめた dict."""
-    return {
-        "age_diff_parent_child": load_age_diff_parent_child(
-            _DATA_DIR / "age_diff_parent_child.csv"
-        ),
-        "age_diff_couple": load_age_diff_couple(_DATA_DIR / "age_diff_couple.csv"),
-        "demographic_by_age_sex": sample_stats.demographic_by_age_sex,
-    }
+    return ObjectiveInput(
+        age_diff_parent_child=load_age_diff_parent_child(_DATA_DIR / "age_diff_parent_child.csv"),
+        age_diff_couple=load_age_diff_couple(_DATA_DIR / "age_diff_couple.csv"),
+        demographic_by_age_sex=sample_stats.demographic_by_age_sex,
+    )
 
 
 @pytest.fixture
-def objective(sample_arrays: PopulationArrays, objective_input: dict) -> ObjectiveState:
+def objective(sample_arrays: PopulationArrays, objective_input: ObjectiveInput) -> ObjectiveState:
     """ObjectiveState を sample_case から初期化."""
     return ObjectiveState.from_arrays(
         arrays=sample_arrays,
@@ -145,8 +157,10 @@ class TestFromArrays:
     def test_total_score_equals_sum_of_l1_per_stat(self, objective: ObjectiveState) -> None:
         """total_score が各統計の L1 ノルムの合計に一致する."""
         expected = float(
-            sum(np.abs(stat.observed.astype(np.int64) - stat.target.astype(np.int64)).sum()
-                for stat in objective.stats)
+            sum(
+                np.abs(stat.observed.astype(np.int64) - stat.target.astype(np.int64)).sum()
+                for stat in objective.stats
+            )
         )
         assert objective.total_score == pytest.approx(expected, abs=1e-6)
 
@@ -214,9 +228,7 @@ class TestProposeChangeNoSideEffect:
 class TestApplyChangeConsistency:
     """apply_change と propose_change の整合性テスト."""
 
-    def test_apply_change_updates_total_score_consistently(
-        self, objective: ObjectiveState
-    ) -> None:
+    def test_apply_change_updates_total_score_consistently(self, objective: ObjectiveState) -> None:
         """apply_change 後の total_score = before + propose_change."""
         before_score = objective.total_score
         idx = 0
@@ -270,9 +282,7 @@ class TestApplyChangeReversibility:
 
         assert objective.total_score == pytest.approx(original_score, abs=1e-6)
 
-    def test_apply_and_revert_restores_observed_histograms(
-        self, objective: ObjectiveState
-    ) -> None:
+    def test_apply_and_revert_restores_observed_histograms(self, objective: ObjectiveState) -> None:
         """apply → revert で全統計の observed が元に戻る."""
         observed_originals = [stat.observed.copy() for stat in objective.stats]
 
@@ -312,9 +322,9 @@ class TestApplyChangeReversibility:
 
 def _full_recompute_score(
     arrays: PopulationArrays,
-    age_diff_parent_child,
-    age_diff_couple,
-    demographic_by_age_sex,
+    age_diff_parent_child: list[AgeDiffParentChildRow],
+    age_diff_couple: list[AgeDiffCoupleRow],
+    demographic_by_age_sex: list[DemographicByAgeSexRow],
 ) -> float:
     """全再計算でスコアを求めるヘルパー（property test 用）."""
     fresh = ObjectiveState.from_arrays(
@@ -330,7 +340,7 @@ class TestDifferentialUpdateEqualsFullRecompute:
     """差分更新が全再計算と bitwise 一致することを確認する（最重要テスト）."""
 
     def test_propose_equals_full_recompute_delta_single(
-        self, objective: ObjectiveState, objective_input: dict
+        self, objective: ObjectiveState, objective_input: ObjectiveInput
     ) -> None:
         """単一の propose_change が全再計算差分に一致する（固定ケース）."""
         idx = 0
@@ -358,12 +368,16 @@ class TestDifferentialUpdateEqualsFullRecompute:
         person_idx_frac=st.floats(min_value=0.0, max_value=1.0, allow_nan=False),
         new_age=st.integers(min_value=0, max_value=100),
     )
-    @settings(max_examples=50, deadline=5000)
+    @settings(
+        max_examples=50,
+        deadline=5000,
+        suppress_health_check=[HealthCheck.function_scoped_fixture],
+    )
     def test_propose_equals_full_recompute_delta_property(
         self,
         person_idx_frac: float,
         new_age: int,
-        objective_input: dict,
+        objective_input: ObjectiveInput,
         sample_stats: InitStats,
     ) -> None:
         """任意の (person_idx, new_age) で propose_change が全再計算差分に一致する."""
@@ -405,12 +419,16 @@ class TestDifferentialUpdateEqualsFullRecompute:
         person_idx_frac=st.floats(min_value=0.0, max_value=1.0, allow_nan=False),
         new_age=st.integers(min_value=0, max_value=100),
     )
-    @settings(max_examples=30, deadline=5000)
+    @settings(
+        max_examples=30,
+        deadline=5000,
+        suppress_health_check=[HealthCheck.function_scoped_fixture],
+    )
     def test_apply_then_revert_restores_score_property(
         self,
         person_idx_frac: float,
         new_age: int,
-        objective_input: dict,
+        objective_input: ObjectiveInput,
         sample_stats: InitStats,
     ) -> None:
         """apply → revert で total_score が元に戻る（property test）."""
@@ -467,6 +485,5 @@ class TestPerformanceSkeleton:
         # （厳密な 100μs/回 の確認は pytest-benchmark で行う）
         avg_us = elapsed / n_trials * 1e6
         assert elapsed < 1.0, (
-            f"1000 回の propose_change が {elapsed:.3f} 秒 かかった "
-            f"(avg={avg_us:.1f}μs/回)"
+            f"1000 回の propose_change が {elapsed:.3f} 秒 かかった (avg={avg_us:.1f}μs/回)"
         )
