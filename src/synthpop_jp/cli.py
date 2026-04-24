@@ -135,7 +135,13 @@ def quickstart(
     console.print(f"[bold]seed:[/bold] {settings.seed}")
 
     # --- family_type_mapping.yaml を探す ---
-    mapping_path = _find_family_type_mapping(config)
+    # settings に明示指定があればそちらを優先する
+    if settings.family_type_mapping is not None:
+        mapping_path = settings.family_type_mapping
+        if not mapping_path.is_absolute():
+            mapping_path = config.parent / mapping_path
+    else:
+        mapping_path = _find_family_type_mapping(config)
 
     # --- CSV 読み込み ---
     console.print("[bold]入力 CSV を読み込み中...[/bold]")
@@ -378,7 +384,11 @@ def _find_default_config() -> Path:
 def _find_family_type_mapping(config_path: Path) -> Path:
     """family_type_mapping.yaml を探して返す.
 
-    config ファイルの親ディレクトリから ``configs/family_type_mapping.yaml`` を探す。
+    以下の順で ``family_type_mapping.yaml`` を探す:
+    1. config ファイルと同じディレクトリ
+    2. config ファイルの親をたどって pyproject.toml が見つかるディレクトリの configs/
+    3. カレントディレクトリの configs/
+    4. カレントディレクトリの親をたどって pyproject.toml が見つかるディレクトリの configs/
 
     Parameters
     ----------
@@ -388,16 +398,30 @@ def _find_family_type_mapping(config_path: Path) -> Path:
     Returns
     -------
     Path
-        family_type_mapping.yaml のパス。
+        family_type_mapping.yaml のパス。見つからない場合は config と同じ親ディレクトリ
+        の candidate を返す（FileNotFoundError はローダ側で発生する）。
     """
-    # config の親ディレクトリの sibling として探す
+    # 1. config の親ディレクトリと同じ場所
     configs_dir = config_path.parent
     candidate = configs_dir / "family_type_mapping.yaml"
     if candidate.exists():
         return candidate
 
-    # pyproject.toml が見つかる親ディレクトリから探す
+    # 2. config ファイルの親をたどって pyproject.toml が見つかるディレクトリ
     for parent in config_path.parents:
+        if (parent / "pyproject.toml").exists():
+            candidate = parent / "configs" / "family_type_mapping.yaml"
+            if candidate.exists():
+                return candidate
+
+    # 3. カレントディレクトリの configs/
+    cwd = Path.cwd()
+    candidate = cwd / "configs" / "family_type_mapping.yaml"
+    if candidate.exists():
+        return candidate
+
+    # 4. カレントディレクトリの親をたどって pyproject.toml
+    for parent in cwd.parents:
         if (parent / "pyproject.toml").exists():
             candidate = parent / "configs" / "family_type_mapping.yaml"
             if candidate.exists():

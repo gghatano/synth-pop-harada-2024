@@ -39,6 +39,9 @@ class Settings(BaseModel):
         入力 CSV が置かれたディレクトリ。
     output_dir : Path
         出力先ディレクトリ。実行時に自動作成される。
+    family_type_mapping : Path | None
+        ``family_type_mapping.yaml`` のパス。省略時は ``configs/family_type_mapping.yaml``
+        を自動検索する。
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -46,6 +49,7 @@ class Settings(BaseModel):
     seed: int = 42
     input_dir: Path
     output_dir: Path
+    family_type_mapping: Path | None = None
 
     @classmethod
     def from_yaml(cls, path: Path) -> "Settings":
