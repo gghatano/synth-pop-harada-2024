@@ -10,7 +10,7 @@ YAML ファイルから ``Settings.from_yaml(path)`` で読み込み、
     from synthpop_jp.config import Settings
 
     settings = Settings.from_yaml(Path("configs/base.yaml"))
-    print(settings.seed)       # 42
+    print(settings.seed)  # 42
     print(settings.input_dir)  # Path("data/sample_case")
 
 設計方針
@@ -52,7 +52,7 @@ class Settings(BaseModel):
     family_type_mapping: Path | None = None
 
     @classmethod
-    def from_yaml(cls, path: Path) -> "Settings":
+    def from_yaml(cls, path: Path) -> Settings:
         """YAML ファイルから Settings を読み込む.
 
         Parameters

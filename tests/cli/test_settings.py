@@ -27,8 +27,12 @@ class TestSettings:
         assert s.seed == 42
 
     def test_input_dir_as_string(self, tmp_path: Path) -> None:
-        """input_dir に文字列を渡しても Path に変換されること."""
-        s = Settings(seed=1, input_dir=str(tmp_path), output_dir=str(tmp_path / "out"))
+        """input_dir に文字列を渡しても Path に変換されること（pydantic の coercion）."""
+        # pydantic v2 は str -> Path の coercion をサポートする。
+        # model_validate を経由すれば str でも受け付ける。
+        s = Settings.model_validate(
+            {"seed": 1, "input_dir": str(tmp_path), "output_dir": str(tmp_path / "out")}
+        )
         assert isinstance(s.input_dir, Path)
 
     def test_extra_field_forbidden(self, tmp_path: Path) -> None:

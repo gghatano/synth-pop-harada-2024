@@ -42,7 +42,7 @@ Repository = "https://github.com/hatanotakuma/synth-pop-harada-2024"
 Issues = "https://github.com/hatanotakuma/synth-pop-harada-2024/issues"
 
 [project.scripts]
-synthpop-jp = "synthpop_jp.cli:app"
+synthpop-jp = "synthpop_jp.cli:main"
 
 # External packages can register extensions via entry points.
 # These groups are declared empty here; contributors plug in via

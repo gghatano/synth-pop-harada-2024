@@ -172,9 +172,7 @@ class TestQuickstartIntegration:
         config_path = _make_config_yaml(tmp_path)
         output_dir = tmp_path / "out"
 
-        result = runner.invoke(
-            app, ["quickstart", "--config", str(config_path), "--dry-run"]
-        )
+        result = runner.invoke(app, ["quickstart", "--config", str(config_path), "--dry-run"])
 
         assert result.exit_code == 0, result.output
         assert not (output_dir / "synthetic_households.csv").exists()
@@ -186,9 +184,7 @@ class TestQuickstartIntegration:
         config_path = _make_config_yaml(tmp_path, seed=42)
         output_dir = tmp_path / "out"
 
-        result = runner.invoke(
-            app, ["quickstart", "--config", str(config_path), "--seed", "99"]
-        )
+        result = runner.invoke(app, ["quickstart", "--config", str(config_path), "--seed", "99"])
 
         assert result.exit_code == 0, result.output
         assert (output_dir / "synthetic_households.csv").exists()

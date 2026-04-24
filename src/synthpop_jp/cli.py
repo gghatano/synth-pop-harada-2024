@@ -10,9 +10,9 @@ Phase 2 以降は ``generate`` / ``evaluate`` / ``improve`` / ``compare`` を実
 from __future__ import annotations
 
 import logging
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
-from typing import Annotated, NoReturn, Optional
+from typing import Annotated, NoReturn
 
 import typer
 from rich.console import Console
@@ -28,7 +28,7 @@ app: typer.Typer = typer.Typer(
 )
 
 
-class LogLevel(str, Enum):
+class LogLevel(StrEnum):
     """ログレベルの選択肢."""
 
     DEBUG = "DEBUG"
@@ -55,16 +55,18 @@ def _not_yet(command: str, phase: str) -> NoReturn:
 @app.command()
 def quickstart(
     config: Annotated[
-        Optional[Path],
+        Path | None,
         typer.Option("--config", help="設定ファイルのパス。省略時は configs/base.yaml を使う。"),
     ] = None,
     seed: Annotated[
-        Optional[int],
+        int | None,
         typer.Option("--seed", help="乱数シード。指定すると config の seed を上書きする。"),
     ] = None,
     dry_run: Annotated[
         bool,
-        typer.Option("--dry-run", help="ファイル書き出しをスキップして読み込みと生成のみ実行する。"),
+        typer.Option(
+            "--dry-run", help="ファイル書き出しをスキップして読み込みと生成のみ実行する。"
+        ),
     ] = False,
     log_level: Annotated[
         LogLevel,
@@ -124,11 +126,13 @@ def quickstart(
     input_dir = settings.input_dir
     output_dir = settings.output_dir
 
-    # input_dir が相対パスの場合は config ファイルの親ディレクトリを基準に解決
+    # 相対パスの解決基点: pyproject.toml がある「プロジェクトルート」を優先し、
+    # 見つからない場合は config ファイルの親ディレクトリを使う。
+    base_dir = _find_project_root(config)
     if not input_dir.is_absolute():
-        input_dir = config.parent / input_dir
+        input_dir = base_dir / input_dir
     if not output_dir.is_absolute():
-        output_dir = config.parent / output_dir
+        output_dir = base_dir / output_dir
 
     console.print(f"[bold]入力ディレクトリ:[/bold] {input_dir}")
     console.print(f"[bold]出力ディレクトリ:[/bold] {output_dir}")
@@ -173,9 +177,7 @@ def quickstart(
         # age_diff_couple / age_diff_parent_child は読み込むが InitStats では使わない
         # （Phase 2 の SA で使用）
         _age_diff_couple = load_age_diff_couple(input_dir / "age_diff_couple.csv")
-        _age_diff_parent_child = load_age_diff_parent_child(
-            input_dir / "age_diff_parent_child.csv"
-        )
+        _age_diff_parent_child = load_age_diff_parent_child(input_dir / "age_diff_parent_child.csv")
         del _age_diff_couple, _age_diff_parent_child
 
     except FileNotFoundError as exc:
@@ -352,6 +354,37 @@ def validate_config(
         raise typer.Exit(code=1) from None
 
     console.print(f"[green]✓ Config is valid:[/green] {config}")
+
+
+def _find_project_root(config_path: Path) -> Path:
+    """プロジェクトルートを返す.
+
+    ``pyproject.toml`` が置かれているディレクトリを「プロジェクトルート」とみなす。
+    config ファイルの親から順にたどり、見つからなければカレントディレクトリも探す。
+    最終的に見つからない場合は config ファイルの親ディレクトリを返す。
+
+    Parameters
+    ----------
+    config_path : Path
+        設定ファイルのパス。
+
+    Returns
+    -------
+    Path
+        プロジェクトルートのディレクトリ。
+    """
+    # config ファイルの親からたどる
+    for parent in [config_path.parent, *config_path.parents]:
+        if (parent / "pyproject.toml").exists():
+            return parent
+
+    # カレントディレクトリからたどる
+    cwd = Path.cwd()
+    for parent in [cwd, *cwd.parents]:
+        if (parent / "pyproject.toml").exists():
+            return parent
+
+    return config_path.parent
 
 
 def _find_default_config() -> Path:
