@@ -60,10 +60,17 @@ description: 段階 1 で固めた計画に基づいて TDD で実装を進め�
 ## 完了条件
 
 - [ ] 計画で挙げたテスト観点のうち、必須項目がすべてテストとして存在する
-- [ ] すべてのテストが通る（`pytest` / `uv run pytest` が green）
+- [ ] CI と同一の以下 4 コマンドを **すべて引数なし** で走らせて green（詳細: [`docs/rules/ci-parity.md`](../../docs/rules/ci-parity.md)）
+  ```bash
+  uv run ruff check .
+  uv run ruff format --check .
+  uv run pyright
+  uv run pytest
+  ```
+  - `uv run pyright src/` のような部分検査で済ませるのは **不可**（tests 側の型エラーを見落とす。PR #17 / #18 の再発防止）
 - [ ] 実験を行った場合、seed と設定が再現可能な形で保存されている
 - [ ] 実験結果は Markdown レポート化されている（HTML 化は段階 3 以降でも可）
-- [ ] コミットが意味単位で小さく分かれている
+- [ ] 各 TDD サイクルが **`test:` コミットと `feat:` コミットに分離** されている（詳細は下の「コミット単位」節）
 
 ## 注意点
 
@@ -81,6 +88,31 @@ description: 段階 1 で固めた計画に基づいて TDD で実装を進め�
 | 最小実装 | `feat: add delta.apply for SA iteration` | `WIP SA` |
 | 整理 | `refactor: move Pop dtype into types module` | `misc cleanup` |
 | 設定変更 | `chore: pin numpy>=2.0 in pyproject` | `update deps` |
+
+### 1 TDD サイクル = 最低 2 コミット
+
+**test コミットと feat コミットを同一コミットにまとめない**。
+Phase 1 の Issue #13 実装時、1 コミットに test と src が混入して「Red の段階で実行したら本当に落ちたのか」が後追いできなくなる事案があった。
+
+正しい粒度:
+
+```
+test: add property test for PopulationArrays roundtrip (refs #13)
+feat: implement PopulationArrays.from_households (refs #13)
+```
+
+誤った粒度:
+
+```
+feat: implement PopulationArrays.from_households with tests (refs #13)   # NG: test+feat 混在
+```
+
+`refactor:` コミットは同一サイクル内で必要なときだけ追加する。テストを変えない整理のみ `refactor:` を名乗る。
+
+### コミット前に必須の検査
+
+各コミット前に `uv run pyright`（引数なし、src+tests 両方）を少なくとも 1 度走らせる。
+`uv run pyright src/` で済ませると、tests 側で Literal 外の値を渡すテストや pytest.approx の型不明が見逃される（PR #17 で実際に発生）。
 
 ## GitHub Issue に追記すべきこと（実装中）
 
