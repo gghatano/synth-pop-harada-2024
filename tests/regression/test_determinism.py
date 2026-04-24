@@ -27,7 +27,22 @@ from synthpop_jp.rng import SeedRegistry
 # 定数
 # ---------------------------------------------------------------------------
 
-_REPO_ROOT = Path(__file__).parents[4]
+
+def _find_repo_root() -> Path:
+    """`pyproject.toml` を含む最近接の祖先ディレクトリを repo root とみなす.
+
+    worktree 利用時と CI チェックアウト時で階層数が異なるため、
+    ``Path(__file__).parents[N]`` の固定 index ではなく
+    マーカーファイルで探索する。
+    """
+    here = Path(__file__).resolve()
+    for parent in here.parents:
+        if (parent / "pyproject.toml").exists():
+            return parent
+    raise RuntimeError(f"pyproject.toml が {here} から辿れない階層に見つからない")
+
+
+_REPO_ROOT = _find_repo_root()
 _GENERATE_SCRIPT = _REPO_ROOT / "scripts" / "generate_sample_case.py"
 _SAMPLE_CASE_DIR = _REPO_ROOT / "data" / "sample_case"
 
