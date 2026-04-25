@@ -130,6 +130,79 @@ Issue #12 (data contract)                          # 先行、他 4 つの土台
                  └─ Issue #15 (quickstart CLI)     # #14 を利用
 ```
 
+## Agent 側の進捗報告義務
+
+Phase 2 Wave 1 の Issue #27 と #29 で、サブエージェントが「テストをまとめて書いてから Green に進む」戦略を取り、
+10 分以上 Issue コメントもコミットもなく無音になった結果 timeout 停止する事案が連続発生した。
+根本原因は **Agent 側に明確な進捗報告義務がなかったこと**。
+本節では義務を定める。
+
+### plan コメントの投稿タイミング
+
+**最初の 1 commit と同時に** Issue にコメントとして plan を投稿する。後回し禁止。
+
+Issue #27 / #29 の事例：plan コメントを「実装が固まってから投稿しよう」と後回しにした結果、
+最初の commit すら入らないまま timeout した。PM は何が起きているか把握できなかった。
+
+```bash
+# 最初の test: コミットと同時に plan を投稿する
+gh issue comment <N> --body "## 実装計画
+..."
+git add tests/...
+git commit -m "test: <first test> (refs #<N>)"
+```
+
+### 進捗コメントの頻度
+
+**3 コミット毎、または最後のコメントから 10 分のどちらか先に達した時点**で、
+Issue に 1 コメントを投稿する。
+
+コメントの中身は 3 行以内：
+
+```
+- 何をやったか（例: WorktreeInfo dataclass と collect_worktree_info を実装）
+- 想定通りだったか（例: 想定通り、または「git worktree list の行形式が予想と違いパース修正」）
+- 次に何をやるか（例: IssueInfo 収集関数のテストに着手）
+```
+
+これは `.claude/skills/2_issue_impl.md` 手順 7「節目ごとに Issue へ進捗コメントを残す」と同義。
+フォーマットを固定することで PM 側の読み取りコストを下げる。
+
+### self-stall 宣言
+
+最終 commit から **15 分以上**、かつ進捗コメントも追加されていない状態を **self-stall** と呼ぶ。
+
+self-stall 状態になったら、作業を中断して以下を実行する：
+
+1. 現在の差分を中間コミットとして push（`wip:` プレフィックスでよい）
+2. `gh pr create --draft --base develop --title "WIP: <branch>"` で中間 Draft PR を作成
+3. Issue に「self-stall 宣言コメント」を投稿する：
+
+   ```
+   ## self-stall 宣言（PM 報告）
+   - 最終 commit から 15 分以上停止
+   - 現状: <何ができていて何が詰まっているか>
+   - 原因仮説: <詰まり原因>
+   - 要判断: <PM に判断を求めること、または次のアクション>
+   ```
+4. 完了報告を返す（PM がセッションを引き継ぐ）
+
+PM 側は `make pm` または `uv run python scripts/pm_status.py` で stale worktree を検知できる
+（最終 commit から 10 分で 🟡 警告、20 分で 🔴 危険マーク）。
+
+### PM による観測
+
+```bash
+# 全 active worktree の状態を 1 画面で確認
+make pm
+
+# Phase 2 の Issue に絞り、stale 閾値を 15 分に変更
+make pm ARGS="--phase 2 --stale-minutes 15"
+
+# JSON で機械可読出力
+make pm ARGS="--json"
+```
+
 ## 親セッションの監視ループ
 
 サブエージェントを `run_in_background: true` で起動したら:
@@ -201,4 +274,11 @@ Issue #12 (data contract)                          # 先行、他 4 つの土台
 ## 想定規模
 
 <N>〜<M> 行の実装 + <X>〜<Y> 行のテスト。
+
+## 進捗報告義務
+
+- 最初の commit と同時に plan コメントを Issue #<N> に投稿（後回し禁止、#27/#29 の timeout 事例を反省）
+- 3 コミット毎 or 10 分毎に 1 行進捗コメント（何をやったか / 想定通りか / 次は何か）
+- 最終 commit から 15 分停止で中間 Draft PR 作成 + self-stall 宣言コメント + 完了報告
+- PM は `make pm` で stale 検知（10 分 🟡 / 20 分 🔴）
 ```
