@@ -34,6 +34,7 @@ dependencies = [
     "pyyaml>=6.0",
     "scikit-learn>=1.5",
     "matplotlib>=3.9",
+    "plotly>=5.20",
 ]
 
 [project.urls]
