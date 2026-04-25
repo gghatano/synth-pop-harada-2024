@@ -200,3 +200,65 @@ _GENERATE_SCRIPT = _REPO_ROOT / "scripts" / "generate_sample_case.py"
 
 - 現行実装例: `tests/regression/test_determinism.py` の `_find_repo_root`
 - 関連: PR #18 で CI 専用の失敗として修正
+
+---
+
+## 11. commit cadence — 実装を小さく刻んで詰まりを防ぐ
+
+TDD の Red/Green/Refactor を守っていても、「テストをたくさん書いてから一気に Green にする」という進め方をすると Agent が無音 stall する。
+本節では commit の粒度を明示し、物理的に強制する仕組みを整える（Issue #46）。
+
+### 基本方針
+
+**1 サイクル = 1 commit（test commit + feat commit）**。まとめて書いてからの commit は禁止。
+
+| タイミング | commit メッセージのプレフィックス |
+|---|---|
+| テストファイル 1 つ書いたら | `test:` |
+| 1 関数 / 1 クラス実装したら | `feat:` |
+| ドキュメント 1 節追加したら | `docs:` |
+| リファクタリングしたら | `refactor:` |
+
+commit は小さいほどよい。「このくらいまとめてからでよい」という判断は stall の入口。
+
+### 警告閾値
+
+uncommitted の変更が以下を超えたら即 commit する：
+
+- **ファイル数 5 超**
+- **追加行数 200 超**
+
+`scripts/check_cadence.py` でその場で確認できる：
+
+```bash
+# make cadence で確認
+make cadence
+# OK: 2 files / 45 lines uncommitted
+
+# カスタム閾値
+make cadence ARGS="--threshold-files 3 --threshold-lines 100"
+
+# 直接呼ぶ場合
+uv run python scripts/check_cadence.py --worktree .
+```
+
+exit 1 + WARNING が出たら、即 `git add <files> && git commit` すること。
+
+### self-stall の定義と対処
+
+最終 commit から **15 分以上** 経過し、かつ進捗コメントも Issue に追加されていない状態を **self-stall** と呼ぶ。
+
+self-stall に陥ったら：
+
+1. 未コミット差分を `wip:` プレフィックスで commit して push
+2. `gh pr create --draft --base develop` で中間 Draft PR を作成
+3. Issue に self-stall 宣言コメントを投稿（詳細フォーマットは `.claude/skills/multi_agent_orchestration.md`）
+4. 完了報告を返す（PM がセッションを引き継ぐ）
+
+PM 側は `make pm` で stale worktree を検知できる（10 分で警告、20 分で危険）。
+
+### 参考
+
+- `scripts/check_cadence.py`: uncommitted 規模の自動確認ツール
+- `tests/scripts/test_check_cadence.py`: 上記のテスト
+- `.claude/skills/multi_agent_orchestration.md` §「commit cadence の強制」: Agent プロンプトへの組み込み方
