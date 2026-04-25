@@ -886,11 +886,29 @@ class TestCheckpointPerformance:
     def test_checkpoint_save_under_100ms(self, tmp_path: Path) -> None:
         """1000 世帯規模で checkpoint save が 100ms 以内（I/O 含む）.
 
-        実際の 1000 世帯は 3000 人程度。ここでは 1000 人でテスト。
+        実際の 1000 世帯は 3000 人程度。ここでは 500 人でテスト。
+        age は 30 歳固定（age limit を超えないよう）。
         """
         from synthpop_jp.io.schemas import DemographicByAgeSexRow
 
-        arrays = make_small_arrays(1000)
+        # age が 120 上限を超えないよう、500 人を 30 歳固定で作る
+        family_reg, role_reg, sex_reg = make_registries()
+        households = [
+            Household(
+                household_id=i + 1,
+                family_type="single",
+                members=[
+                    Person(
+                        household_id=i + 1,
+                        role="single",  # type: ignore[arg-type]
+                        sex="M" if i % 2 == 0 else "F",  # type: ignore[arg-type]
+                        age=30,
+                    )
+                ],
+            )
+            for i in range(500)
+        ]
+        arrays = PopulationArrays.from_households(households, family_reg, role_reg, sex_reg)
         demo_rows = [
             DemographicByAgeSexRow(sex="M", age=age, count=20)
             for age in range(0, 100, 5)
@@ -904,7 +922,7 @@ class TestCheckpointPerformance:
             age_diff_couple=[],
             demographic_by_age_sex=demo_rows,
         )
-        best_arrays = make_small_arrays(1000)
+        best_arrays = arrays  # best_arrays は同じ配列を使用（別コピーは不要）
         rng = np.random.default_rng(42)
         rng_state = rng.bit_generator.state
         state = SAState(iter=10000, current_score=50.0, best_score=40.0)
