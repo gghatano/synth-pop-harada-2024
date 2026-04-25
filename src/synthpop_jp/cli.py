@@ -453,12 +453,19 @@ def generate(
     cooling = ExponentialCooling(T0=annealing_cfg.T0, alpha=annealing_cfg.alpha)
     runner_sa = SARunner(rng=seed_reg.rng("sa_runner"))
 
+    # trace.jsonl の書き出し先は dry_run でない場合にのみ設定する
+    # progress_enabled は dry_run=True または log_level=ERROR のとき抑制する
+    trace_path_for_run = output_dir / "trace.jsonl" if not dry_run else None
+    progress_enabled_for_run = not dry_run and log_level != LogLevel.ERROR
+
     sa_result = runner_sa.run(
         arrays=arrays,
         objective=objective,
         transition=transition,
         cooling=cooling,
         config=annealing_cfg,
+        trace_path=trace_path_for_run,
+        progress_enabled=progress_enabled_for_run,
     )
 
     best_score = sa_result.final_state.best_score
@@ -551,6 +558,8 @@ def generate(
     console.print(f"  {hh_csv_path.name}")
     console.print(f"  {persons_csv_path.name}")
     console.print(f"  {metrics_path.name}")
+    if annealing_cfg.trace_enabled:
+        console.print("  trace.jsonl")
 
 
 @app.command()

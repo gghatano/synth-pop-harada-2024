@@ -106,6 +106,50 @@ Phase 3b で次の順で生成する:
 
 **JSON Schema を `schemas/metrics.schema.json` として Phase 3b でコミット。**
 
-## 7. 履歴
+## 7. `trace.jsonl` スキーマ（Issue #31）
+
+`synthpop-jp generate` を実行すると `outputs/<run_dir>/trace.jsonl` が生成される。
+1 行 = 1 JSON object の形式（JSON Lines 形式）。
+
+### 7.1 スキーマ定義
+
+```json
+{
+  "iter":          "int      — 反復番号（0-indexed）",
+  "temperature":   "float    — その反復の SA 温度",
+  "current_score": "float    — 受理後の現在スコア（最後に受理された遷移後の値）",
+  "best_score":    "float    — これまでの最良スコア",
+  "accepted":      "bool     — この反復で遷移が受理されたか",
+  "delta":         "float    — スコア差分（new_score - old_score）",
+  "timestamp":     "string   — 記録時刻（ISO 8601 形式、UTC、例: 2026-04-24T00:00:00+00:00）"
+}
+```
+
+pydantic モデル定義: `src/synthpop_jp/optimize/trace.py` の `TraceEvent`。
+
+### 7.2 生成ポリシー
+
+- 書き出し頻度: `AnnealingConfig.log_every_n_iters`（既定 1000）反復ごとに 1 行
+- 有効/無効の切り替え: `AnnealingConfig.trace_enabled`（既定 True）
+- ファイルが存在しない場合は自動作成。親ディレクトリも自動作成される
+- `--dry-run` 実行では trace.jsonl は生成されない
+- 行数の目安: `max_iters // log_every_n_iters`（20 万反復 / 1000 = 200 行）
+- 1 行あたりの目安サイズ: 100〜200 バイト → 20 万反復で約 20〜40 MB
+
+### 7.3 読み込みヘルパー
+
+```python
+from pathlib import Path
+from synthpop_jp.optimize.trace import read_trace
+
+df = read_trace(Path("outputs/run/trace.jsonl"))
+# df.columns: ["iter", "temperature", "current_score", "best_score",
+#              "accepted", "delta", "timestamp"]
+```
+
+Phase 3b で収束グラフの生成に使う（スコープ外: #11 ロードマップ）。
+
+## 8. 履歴
 
 - 2026-04-23: v0.0.1 骨子作成（Phase 0）
+- 2026-04-24: §7「trace.jsonl スキーマ」追記（Issue #31）

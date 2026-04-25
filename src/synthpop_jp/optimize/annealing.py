@@ -1,4 +1,4 @@
-"""Simulated Annealing runner (Issue #30).
+"""Simulated Annealing runner (Issue #30, #31).
 
 SA（シミュレーテッドアニーリング）の中核ループを実装するモジュール。
 
@@ -14,12 +14,15 @@ SA（シミュレーテッドアニーリング）の中核ループを実装す
   受理なら ``objective.apply_change()``（内部で arrays.age も更新される）
 - ``best_score`` / ``best_arrays`` をスコア改善時のみ更新
 - 温度管理は ``CoolingSchedule`` に外注し、将来の LinearCooling 追加を容易にする
-- trace / rich.live は Issue #31 のスコープ（本 Issue には含まない）
+- trace.jsonl 書き出し（Issue #31）: ``config.trace_enabled=True`` かつ ``trace_path`` 指定時に有効
+- rich.Progress 進捗バー（Issue #31）: ``progress_enabled=True`` のとき有効
 """
 
 from __future__ import annotations
 
 import copy
+import datetime
+import types
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
@@ -28,11 +31,120 @@ import numpy as np
 from synthpop_jp.optimize.transitions import TransitionError
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
+    from rich.progress import Progress, TaskID
+
     from synthpop_jp.config import AnnealingConfig
     from synthpop_jp.optimize.cooling import CoolingSchedule
     from synthpop_jp.optimize.objective import ObjectiveState
     from synthpop_jp.optimize.state import PopulationArrays
     from synthpop_jp.optimize.transitions import AgeChangeTransition
+
+
+# ---------------------------------------------------------------------------
+# 内部ヘルパー
+# ---------------------------------------------------------------------------
+
+
+class _NullWriter:
+    """trace が無効のときに TraceWriter の代替として使う null オブジェクト."""
+
+    def __enter__(self) -> _NullWriter:
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: types.TracebackType | None,
+    ) -> None:
+        pass
+
+    def write(self, event: object) -> None:
+        """何もしない."""
+
+
+def _build_progress(
+    *,
+    max_iters: int,
+    eval_limit: int,
+    enabled: bool,
+) -> _NullProgressCtx | _RichProgressCtx:
+    """rich.Progress コンテキストマネージャを作る.
+
+    ``enabled=False`` のとき null オブジェクトを返す。
+    """
+    if not enabled:
+        return _NullProgressCtx()
+    return _RichProgressCtx(max_iters=max_iters, eval_limit=eval_limit)
+
+
+class _NullProgressCtx:
+    """progress_enabled=False のときに使う null コンテキスト."""
+
+    def __enter__(self) -> None:
+        return None
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: types.TracebackType | None,
+    ) -> None:
+        pass
+
+
+class _RichProgressCtx:
+    """rich.Progress を wrap するコンテキストマネージャ."""
+
+    def __init__(self, *, max_iters: int, eval_limit: int) -> None:
+        self._total = eval_limit if eval_limit > 0 else max_iters
+        self._progress: Progress | None = None
+        self._task_id: TaskID | None = None
+
+    def __enter__(self) -> tuple[TaskID, Progress]:
+        from rich.progress import (
+            BarColumn,
+            MofNCompleteColumn,
+            Progress,
+            SpinnerColumn,
+            TaskProgressColumn,
+            TextColumn,
+            TimeElapsedColumn,
+            TimeRemainingColumn,
+        )
+
+        self._progress = Progress(
+            SpinnerColumn(),
+            TextColumn("[bold blue]SA最適化[/bold blue]"),
+            BarColumn(),
+            MofNCompleteColumn(),
+            TaskProgressColumn(),
+            TextColumn("[green]score:{task.fields[current_score]:.1f}[/green]"),
+            TextColumn("[cyan]best:{task.fields[best_score]:.1f}[/cyan]"),
+            TextColumn("[yellow]accept:{task.fields[accept_rate]:.3f}[/yellow]"),
+            TimeElapsedColumn(),
+            TimeRemainingColumn(),
+        )
+        self._progress.__enter__()
+        self._task_id = self._progress.add_task(
+            "SA",
+            total=self._total,
+            current_score=0.0,
+            best_score=0.0,
+            accept_rate=0.0,
+        )
+        return (self._task_id, self._progress)
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: types.TracebackType | None,
+    ) -> None:
+        if self._progress is not None:
+            self._progress.__exit__(exc_type, exc_val, exc_tb)
 
 
 # ---------------------------------------------------------------------------
@@ -161,6 +273,8 @@ class SARunner:
         transition: AgeChangeTransition,
         cooling: CoolingSchedule,
         config: AnnealingConfig,
+        trace_path: Path | None = None,
+        progress_enabled: bool = True,
     ) -> SAResult:
         """SA ループを実行して SAResult を返す.
 
@@ -176,12 +290,20 @@ class SARunner:
             冷却スケジュール。``get_temperature(iter)`` で温度を取得する。
         config : AnnealingConfig
             SA の実行パラメータ。
+        trace_path : Path | None
+            trace.jsonl の書き出し先パス。``config.trace_enabled=True`` かつ
+            ``trace_path`` が指定されている場合のみ書き出す。デフォルト None。
+        progress_enabled : bool
+            True のとき rich.Progress 進捗バーを表示する。デフォルト True。
+            CLI ``--dry-run`` または ``--log-level ERROR`` のとき False を渡す。
 
         Returns
         -------
         SAResult
             最良配列・最終状態・スコア履歴を含む実行結果。
         """
+        from synthpop_jp.optimize.trace import TraceEvent, TraceWriter
+
         # 初期状態
         initial_score = float(objective.total_score)
         state = SAState(
@@ -207,62 +329,118 @@ class SARunner:
         # 最大反復回数
         max_iters = config.max_iters if config.max_iters > 0 else int(1e18)
 
-        iter_n = 0
-        while iter_n < max_iters:
-            # evals_per_agent 停止
-            if eval_limit > 0 and iter_n >= eval_limit:
-                break
+        # trace writer の準備
+        use_trace = config.trace_enabled and trace_path is not None
+        log_every = config.log_every_n_iters if config.log_every_n_iters > 0 else 1
 
-            # target_threshold 停止
-            if config.target_threshold > 0.0 and state.best_score <= config.target_threshold:
-                break
+        # rich.Progress の準備
+        _progress_ctx = _build_progress(
+            max_iters=max_iters,
+            eval_limit=eval_limit,
+            enabled=progress_enabled,
+        )
 
-            # patience 停止
-            if config.patience > 0 and patience_counter >= config.patience:
-                break
+        with _progress_ctx as progress_info:
+            task_id = progress_info[0] if progress_info is not None else None
+            rich_progress = progress_info[1] if progress_info is not None else None
 
-            # 温度取得
-            temperature = cooling.get_temperature(iter_n)
+            # 直近 log_every 反復の受理数（受理率計算用）
+            recent_accepted = 0
 
-            # 遷移提案（ハード制約違反で TransitionError が起きたらスキップ）
-            try:
-                person_idx, new_age = transition.propose()
-            except TransitionError:
-                iter_n += 1
-                state.iter = iter_n
-                state.n_total += 1
-                patience_counter += 1
-                continue
-
-            # 差分スコア計算
-            delta = objective.propose_change(person_idx, new_age)
-
-            # Metropolis 受理判定
-            accepted = metropolis_accept(delta=delta, temperature=temperature, rng=self._rng)
-
-            state.n_total += 1
-
-            if accepted:
-                # 遷移を受理
-                objective.apply_change(person_idx, new_age)
-                state.n_accepted += 1
-                state.current_score = float(objective.total_score)
-
-                # best_score 更新
-                if state.current_score < state.best_score:
-                    state.best_score = state.current_score
-                    best_arrays = copy.deepcopy(arrays)
-                    scores.append(state.best_score)
-
-            # patience カウンタ更新
-            if state.best_score < prev_best:
-                patience_counter = 0
-                prev_best = state.best_score
+            # trace writer は use_trace のときだけ開く
+            writer_ctx: TraceWriter | _NullWriter
+            if use_trace and trace_path is not None:
+                writer_ctx = TraceWriter(trace_path)
             else:
-                patience_counter += 1
+                writer_ctx = _NullWriter()
 
-            iter_n += 1
-            state.iter = iter_n
+            with writer_ctx as writer:
+                iter_n = 0
+                while iter_n < max_iters:
+                    # evals_per_agent 停止
+                    if eval_limit > 0 and iter_n >= eval_limit:
+                        break
+
+                    # target_threshold 停止
+                    target_ok = config.target_threshold > 0.0
+                    if target_ok and state.best_score <= config.target_threshold:
+                        break
+
+                    # patience 停止
+                    if config.patience > 0 and patience_counter >= config.patience:
+                        break
+
+                    # 温度取得
+                    temperature = cooling.get_temperature(iter_n)
+
+                    # 遷移提案（ハード制約違反で TransitionError が起きたらスキップ）
+                    try:
+                        person_idx, new_age = transition.propose()
+                    except TransitionError:
+                        iter_n += 1
+                        state.iter = iter_n
+                        state.n_total += 1
+                        patience_counter += 1
+                        continue
+
+                    # 差分スコア計算
+                    delta = objective.propose_change(person_idx, new_age)
+
+                    # Metropolis 受理判定
+                    accepted = metropolis_accept(
+                        delta=delta, temperature=temperature, rng=self._rng
+                    )
+
+                    state.n_total += 1
+
+                    if accepted:
+                        # 遷移を受理
+                        objective.apply_change(person_idx, new_age)
+                        state.n_accepted += 1
+                        state.current_score = float(objective.total_score)
+                        recent_accepted += 1
+
+                        # best_score 更新
+                        if state.current_score < state.best_score:
+                            state.best_score = state.current_score
+                            best_arrays = copy.deepcopy(arrays)
+                            scores.append(state.best_score)
+
+                    # patience カウンタ更新
+                    if state.best_score < prev_best:
+                        patience_counter = 0
+                        prev_best = state.best_score
+                    else:
+                        patience_counter += 1
+
+                    iter_n += 1
+                    state.iter = iter_n
+
+                    # log_every_n_iters ごとに trace 書き出し + 進捗更新
+                    if iter_n % log_every == 0:
+                        if use_trace:
+                            ts = datetime.datetime.now(datetime.UTC).isoformat()
+                            event = TraceEvent(
+                                iter=iter_n,
+                                temperature=temperature,
+                                current_score=state.current_score,
+                                best_score=state.best_score,
+                                accepted=accepted,
+                                delta=delta,
+                                timestamp=ts,
+                            )
+                            writer.write(event)
+
+                        if rich_progress is not None and task_id is not None:
+                            accept_rate = recent_accepted / log_every
+                            rich_progress.update(
+                                task_id,
+                                completed=iter_n,
+                                current_score=state.current_score,
+                                best_score=state.best_score,
+                                accept_rate=accept_rate,
+                            )
+                        recent_accepted = 0
 
         state.iter = iter_n
         return SAResult(
