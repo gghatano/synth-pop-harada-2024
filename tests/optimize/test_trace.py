@@ -299,9 +299,9 @@ class TestReadTrace:
             )
 
         df = read_trace(trace_path)
-        assert df["iter"].iloc[0] == 999
-        assert abs(df["current_score"].iloc[0] - 123.45) < 1e-6
-        assert abs(df["best_score"].iloc[0] - 100.0) < 1e-6
+        assert int(df["iter"].iloc[0]) == 999  # type: ignore[arg-type]
+        assert abs(float(df["current_score"].iloc[0]) - 123.45) < 1e-6  # type: ignore[arg-type]
+        assert abs(float(df["best_score"].iloc[0]) - 100.0) < 1e-6  # type: ignore[arg-type]
 
 
 # ---------------------------------------------------------------------------
@@ -407,7 +407,7 @@ class TestSARunnerTraceIntegration:
 
         assert not trace_path.exists()
 
-    def test_trace_file_not_created_without_path(self, tmp_path: Path) -> None:  # noqa: ARG002
+    def test_trace_file_not_created_without_path(self, tmp_path: Path) -> None:
         """trace_path=None のとき trace ファイルが作られない."""
         config = self._make_config(max_iters=50, log_every_n_iters=10, trace_enabled=True)
         self._run_with_mock(config, trace_path=None)
@@ -438,7 +438,15 @@ class TestSARunnerTraceIntegration:
         lines = trace_path.read_text(encoding="utf-8").splitlines()
         assert len(lines) > 0
 
-        required_keys = {"iter", "temperature", "current_score", "best_score", "accepted", "delta", "timestamp"}
+        required_keys = {
+            "iter",
+            "temperature",
+            "current_score",
+            "best_score",
+            "accepted",
+            "delta",
+            "timestamp",
+        }
         for line in lines:
             data = json.loads(line)
             missing = required_keys - set(data.keys())
