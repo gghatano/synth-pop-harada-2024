@@ -65,27 +65,88 @@ experiments/
 
 ---
 
-## 5. Markdown → HTML の変換方針
+## 5. HTML レポートの生成方針（Phase 1 以降確定）
 
-変換ツールは以下のいずれかを使います。どれを採用するかは Phase 0 で確定させます（暫定は Pandoc）。
+Phase 1 の Issue #38 で HTML 生成パイプラインが実装された（`src/synthpop_jp/reports/`）。
+Pandoc・Quarto への依存なしに、Python 単体で self-contained HTML を生成できる。
 
-| ツール | 長所 | 短所 |
-|---|---|---|
-| Pandoc | 汎用的、テンプレ差し替え可 | 初期テンプレ整備が必要 |
-| `markdown-it-py` + custom CSS | Python 内完結、既存環境と親和 | テーブル整形の CSS 自作が必要 |
-| Quarto | 図表・式込みで強い | 依存が大きい |
+### 5.1 基本的な使い方
 
-暫定の変換コマンド例（Pandoc）:
+```python
+import json
+import pandas as pd
+from pathlib import Path
+from synthpop_jp.reports.html import generate_html_report
 
-```bash
-pandoc experiments/2026-04-23-sa-convergence-baseline/report.md \
-  --standalone \
-  --css ../../../docs/assets/report.css \
-  --metadata title="SA 収束性ベースライン" \
-  -o experiments/2026-04-23-sa-convergence-baseline/report.html
+data = {
+    "households": pd.read_csv("outputs/quickstart/synthetic_households.csv"),
+    "persons": pd.read_csv("outputs/quickstart/synthetic_persons.csv"),
+    "metrics": json.loads(Path("outputs/quickstart/metrics.json").read_text()),
+}
+generate_html_report(
+    data,
+    "experiments/<日付>-<slug>/report.html",
+    template_vars={"title": "レポートタイトル"},
+)
 ```
 
-将来的には `synthpop-jp` の CLI サブコマンド（例: `synthpop-jp report-to-html`）に包む予定です。
+### 5.2 技術仕様
+
+| 項目 | 仕様 |
+|---|---|
+| plotly | `to_html(include_plotlyjs="inline")` でインライン埋め込み |
+| CSS | `<style>` タグ内インライン（外部ファイル不要） |
+| ファイルサイズ | plotly inline JS（約 4.7 MB）を含む。CDN 版は 10 KB 未満だが self-contained でなくなる |
+| 外部依存 | ゼロ（ブラウザだけで開ける） |
+
+### 5.3 将来の CLI 化
+
+`synthpop-jp report` サブコマンドへの統合は別 Issue で対応予定。
+現在は Python API として直接呼び出す。
+
+---
+
+## 5a. 非技術者向け文体ガイド
+
+経営層（完全非技術者）がレポートを 30 秒で理解できるよう、以下の文体を守る。
+`docs/rules/documentation-style.md` の全体ガイドと整合させること。
+
+### 5a.1 要約の書き方（冒頭 5 行の原則）
+
+要約セクションは **「今何が分かったか」** と **「次に何を決めたいか」** の 2 軸で書く。
+
+良い例:
+> 合成人口（統計に合わせて人工的に作成した個票データ）を生成しました。
+> 100 世帯のダミー入力から 266 人分のデータを出力しました。
+> 最も多い家族構成は「夫婦と子ども」（30%）です。
+> SA 最適化（徐々に統計に近づける手法）は Phase 2 で実施します。
+> 次のステップでは年齢分布の精度を改善します。
+
+悪い例:
+> quickstart を実行して合成人口を生成した。metrics.json を確認すると 266 人だった。
+
+差異:
+- 良い例は「誰に何が分かるか」を先に書いている
+- 専門用語（合成人口、SA）に括弧補足がある
+- 悪い例は実装者の作業メモになっており、非技術者には意味が分からない
+
+### 5a.2 1 文の長さ
+
+| ルール | 目安 |
+|---|---|
+| 1 文の字数 | 30〜40 字（最長 60 字以内） |
+| 段落の文数 | 1 段落に 2〜3 文まで |
+| 専門用語 | 初出に括弧補足を付ける |
+
+### 5a.3 CSS 設計の指針
+
+非技術者向け HTML レポートの CSS は以下を守る:
+- フォントサイズ: `1.1rem` 以上（デフォルト 16px の 1.1 倍 = 約 17.6px）
+- 要約セクション: 背景色（黄色系）+ 太字 + 左ボーダーで視覚的に目立たせる
+- カラーパレット: 高コントラスト、柔らかい色調（`#4E79A7`, `#E15759` 等）
+- 外部フォントや CDN を使わない（self-contained 維持）
+
+実装例: `src/synthpop_jp/reports/html.py` の `_CSS` 定数を参照。
 
 ---
 

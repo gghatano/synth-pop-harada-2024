@@ -1,0 +1,31 @@
+# synthpop-jp デフォルト設定ファイル
+#
+# synthpop-jp quickstart / generate コマンドが使うデフォルト設定です。
+# 同梱の sample_case データを使い、outputs/quickstart/ に出力します。
+#
+# フィールドの詳細は src/synthpop_jp/config.py の Settings モデルを参照してください。
+
+# 乱数シード: 同じ seed なら出力が bitwise 一致で再現できます
+seed: 42
+
+# 入力 CSV ディレクトリ（family_type_counts.csv など）
+input_dir: data/sample_case
+
+# 出力ディレクトリ（synthetic_households.csv などが書き出されます）
+output_dir: outputs/quickstart
+
+# SA（シミュレーテッドアニーリング）最適化の設定（generate コマンドが使用）
+# フィールドの詳細は src/synthpop_jp/config.py の AnnealingConfig モデルを参照してください。
+annealing:
+  # 初期温度: 高いほど最初に広く探索する（>0）
+  T0: 100.0
+  # 冷却率: 1.0 に近いほど緩やかに冷える（(0, 1] の範囲）
+  alpha: 0.999
+  # 最大反復回数
+  max_iters: 1000000
+  # 1 人あたりの評価回数上限（0 で無効）
+  evals_per_agent: 1000
+  # この値以下になったら停止（0.0 で無効）
+  target_threshold: 0.0
+  # best_score が改善しない反復数の上限（0 で無効）
+  patience: 0
