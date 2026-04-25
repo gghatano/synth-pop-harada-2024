@@ -43,7 +43,7 @@ test:
 	uv run pytest -n auto
 
 bench:
-	uv run pytest --benchmark-only
+	uv run pytest tests/benchmarks/ -m benchmark --benchmark-only
 
 quickstart:
 	uv run synthpop-jp quickstart
