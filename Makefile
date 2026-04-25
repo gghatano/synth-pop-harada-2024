@@ -61,3 +61,7 @@ pm:
 	uv run python scripts/pm_status.py $(ARGS)
 
 all: lint format type test
+
+.PHONY: cadence
+cadence:
+	uv run python scripts/check_cadence.py $(ARGS)
