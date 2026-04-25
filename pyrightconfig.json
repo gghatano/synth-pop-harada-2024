@@ -1,5 +1,5 @@
 {
-  "include": ["src", "tests"],
+  "include": ["src", "tests", "scripts"],
   "exclude": ["**/__pycache__", ".venv", "outputs", "artifacts", "paper_results/tmp"],
   "pythonVersion": "3.12",
   "typeCheckingMode": "strict",
