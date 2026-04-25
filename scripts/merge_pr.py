@@ -1,9 +1,10 @@
-"""merge_pr.py — make merge-pr の実体スクリプト。
+"""merge_pr.py — make merge-pr の実体スクリプト.
 
 PM が `make merge-pr PR=N [DRY_RUN=1]` で呼ぶ。
 7 ステップで PR の ready → merge → worktree 削除 → develop 同期を完結させる。
 
-使い方:
+使い方::
+
     uv run python scripts/merge_pr.py --pr 48
     uv run python scripts/merge_pr.py --pr 48 --dry-run
 """
@@ -17,7 +18,6 @@ import sys
 from pathlib import Path
 from typing import Any
 
-
 # ---------------------------------------------------------------------------
 # 内部ヘルパー（patch ポイント）
 # ---------------------------------------------------------------------------
@@ -28,7 +28,7 @@ def _run_cmd(
     cwd: str | None = None,
     check: bool = False,
 ) -> subprocess.CompletedProcess[str]:
-    """subprocess.run のラッパー。テストで patch するためのポイント。"""
+    """Subprocess.run のラッパー。テストで patch するためのポイント."""
     return subprocess.run(
         args,
         capture_output=True,
@@ -44,18 +44,23 @@ def _run_cmd(
 
 
 def branch_to_worktree_path(branch_name: str, repo_root: str) -> str | None:
-    """ブランチ名から worktree path を導出する。
+    """ブランチ名から worktree path を導出する.
 
     変換ルール:
       feature/48-merge-pr-helper → <repo_root>/gitworktree/feature-48-merge-pr-helper
 
     feature/ で始まらないブランチは None を返す。
 
-    Args:
-        branch_name: GitHub PR の headRefName（例: feature/48-merge-pr-helper）
-        repo_root: リポジトリルートの絶対パス
+    Parameters
+    ----------
+    branch_name:
+        GitHub PR の headRefName（例: feature/48-merge-pr-helper）
+    repo_root:
+        リポジトリルートの絶対パス
 
-    Returns:
+    Returns
+    -------
+    str | None
         worktree の絶対パス文字列。feature/ ブランチでなければ None。
     """
     if not branch_name.startswith("feature/"):
@@ -73,21 +78,26 @@ def branch_to_worktree_path(branch_name: str, repo_root: str) -> str | None:
 def check_pr_status(
     pr_data: dict[str, Any],
 ) -> tuple[str, str, str]:
-    """PR の JSON データから状態を解析する。
+    """PR の JSON データから状態を解析する.
 
     PR データは gh pr view --json state,mergeable,headRefName,statusCheckRollup
     の出力を想定する。
 
-    Args:
-        pr_data: gh pr view の JSON パース結果
+    Parameters
+    ----------
+    pr_data:
+        gh pr view の JSON パース結果
 
-    Returns:
+    Returns
+    -------
+    tuple[str, str, str]
         (status, state, head_ref) のタプル。
         status は以下のいずれか:
-          - "ok": merge 可能
-          - "already_merged": 既に merge 済み（no-op でよい）
-          - "ci_failed": CI が失敗している
-          - "error": CLOSED など処理不能な状態
+
+        - "ok": merge 可能
+        - "already_merged": 既に merge 済み（no-op でよい）
+        - "ci_failed": CI が失敗している
+        - "error": CLOSED など処理不能な状態
     """
     state: str = pr_data.get("state", "")
     head_ref: str = pr_data.get("headRefName", "")
@@ -118,24 +128,31 @@ def merge_pr(
     dry_run: bool = False,
     repo_root: str | None = None,
 ) -> int:
-    """PR を merge して worktree を片付ける。
+    """PR を merge して worktree を片付ける.
 
     7 ステップで実行:
-      1. PR 状態確認
-      2. gh pr ready（Draft → Ready）
-      3. gh pr merge --squash --delete-branch
-      4. headRefName 取得（ステップ 1 で取得済み）
-      5. branch → worktree path 変換
-      6. git worktree remove
-      7. git branch -D
-      8. git checkout develop && git pull --ff-only
 
-    Args:
-        pr_number: マージ対象の PR 番号
-        dry_run: True のとき実際のコマンドを実行しない（ステップを表示するのみ）
-        repo_root: リポジトリルートのパス。None の場合は git rev-parse で取得
+    1. PR 状態確認
+    2. gh pr ready（Draft → Ready）
+    3. gh pr merge --squash --delete-branch
+    4. headRefName 取得（ステップ 1 で取得済み）
+    5. branch → worktree path 変換
+    6. git worktree remove
+    7. git branch -D
+    8. git checkout develop && git pull --ff-only
 
-    Returns:
+    Parameters
+    ----------
+    pr_number:
+        マージ対象の PR 番号
+    dry_run:
+        True のとき実際のコマンドを実行しない（ステップを表示するのみ）
+    repo_root:
+        リポジトリルートのパス。None の場合は git rev-parse で取得
+
+    Returns
+    -------
+    int
         終了コード。0 = 成功、1 = エラー
     """
     # repo_root を解決
@@ -150,11 +167,21 @@ def merge_pr(
     # -----------------------------------------------------------------------
     print(f"[merge-pr] Step 1: PR #{pr_number} の状態を確認中...")
     view_result = _run_cmd(
-        ["gh", "pr", "view", pr_str, "--json", "state,mergeable,headRefName,statusCheckRollup"],
+        [
+            "gh",
+            "pr",
+            "view",
+            pr_str,
+            "--json",
+            "state,mergeable,headRefName,statusCheckRollup",
+        ],
         cwd=repo_root,
     )
     if view_result.returncode != 0:
-        print(f"[merge-pr] ERROR: gh pr view に失敗しました: {view_result.stderr}", file=sys.stderr)
+        print(
+            f"[merge-pr] ERROR: gh pr view に失敗しました: {view_result.stderr}",
+            file=sys.stderr,
+        )
         return 1
 
     try:
@@ -166,23 +193,27 @@ def merge_pr(
     status, state, head_ref = check_pr_status(pr_data)
 
     if status == "already_merged":
-        print(f"[merge-pr] WARNING: PR #{pr_number} は既に merged です。worktree 片付けのみ実施します。")
+        print(
+            f"[merge-pr] WARNING: PR #{pr_number} は既に merged です。"
+            "worktree 片付けのみ実施します。"
+        )
         # worktree 片付けだけ行う（merge はスキップ）
-        _cleanup_worktree(pr_number, head_ref, repo_root, dry_run)
+        _cleanup_worktree(head_ref, repo_root, dry_run)
         _sync_develop(repo_root, dry_run)
         return 0
 
     if status == "ci_failed":
         print(
-            f"[merge-pr] ERROR: PR #{pr_number} の CI が SUCCESS ではありません（state={state}）。"
-            "強制 merge を防ぐため中断します。",
+            f"[merge-pr] ERROR: PR #{pr_number} の CI が SUCCESS ではありません"
+            f"（state={state}）。強制 merge を防ぐため中断します。",
             file=sys.stderr,
         )
         return 1
 
     if status == "error":
         print(
-            f"[merge-pr] ERROR: PR #{pr_number} の state={state} は処理できません（OPEN or MERGED のみ）。",
+            f"[merge-pr] ERROR: PR #{pr_number} の state={state} は処理できません"
+            "（OPEN or MERGED のみ）。",
             file=sys.stderr,
         )
         return 1
@@ -221,7 +252,7 @@ def merge_pr(
     # -----------------------------------------------------------------------
     # ステップ 4-7: worktree 片付け
     # -----------------------------------------------------------------------
-    _cleanup_worktree(pr_number, head_ref, repo_root, dry_run)
+    _cleanup_worktree(head_ref, repo_root, dry_run)
 
     # -----------------------------------------------------------------------
     # ステップ 8: develop を最新化
@@ -233,17 +264,14 @@ def merge_pr(
 
 
 def _cleanup_worktree(
-    pr_number: int,
     head_ref: str,
     repo_root: str,
     dry_run: bool,
 ) -> None:
-    """worktree と local branch を削除する（ステップ 5-7）。
+    """Worktree と local branch を削除する（ステップ 5-7）.
 
     worktree や branch が存在しない場合は WARNING を出して続行する。
     """
-    pr_str = str(pr_number)
-
     # ステップ 5: branch → worktree path 変換
     worktree_path = branch_to_worktree_path(head_ref, repo_root)
 
@@ -259,11 +287,14 @@ def _cleanup_worktree(
             )
             if rm_result.returncode != 0:
                 print(
-                    f"[merge-pr] WARNING: worktree remove に失敗しました（不在の可能性）: "
+                    "[merge-pr] WARNING: worktree remove に失敗しました（不在の可能性）: "
                     f"{rm_result.stderr}",
                 )
     else:
-        print(f"[merge-pr] Step 6: worktree path を導出できませんでした（branch={head_ref}）。スキップ。")
+        print(
+            f"[merge-pr] Step 6: worktree path を導出できませんでした"
+            f"（branch={head_ref}）。スキップ。"
+        )
 
     # ステップ 7: git branch -D
     print(f"[merge-pr] Step 7: git branch -D {head_ref}...")
@@ -276,13 +307,13 @@ def _cleanup_worktree(
         )
         if branch_result.returncode != 0:
             print(
-                f"[merge-pr] WARNING: branch -D に失敗しました（不在の可能性）: "
+                "[merge-pr] WARNING: branch -D に失敗しました（不在の可能性）: "
                 f"{branch_result.stderr}",
             )
 
 
 def _sync_develop(repo_root: str, dry_run: bool) -> None:
-    """develop ブランチを最新化する（ステップ 8）。"""
+    """Develop ブランチを最新化する（ステップ 8）."""
     print("[merge-pr] Step 8: develop を最新化中...")
     if dry_run:
         print("  [DRY-RUN] git checkout develop")
@@ -298,10 +329,8 @@ def _sync_develop(repo_root: str, dry_run: bool) -> None:
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    """コマンドライン引数をパースする。"""
-    parser = argparse.ArgumentParser(
-        description="PR を merge して worktree を片付ける。"
-    )
+    """コマンドライン引数をパースする."""
+    parser = argparse.ArgumentParser(description="PR を merge して worktree を片付ける。")
     parser.add_argument(
         "--pr",
         type=int,
@@ -318,7 +347,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def main(argv: list[str] | None = None) -> None:
-    """CLI エントリーポイント。"""
+    """CLI エントリーポイント."""
     args = _parse_args(argv)
     exit_code = merge_pr(pr_number=args.pr, dry_run=args.dry_run)
     sys.exit(exit_code)

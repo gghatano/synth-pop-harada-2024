@@ -11,9 +11,7 @@ import json
 import sys
 import types
 from pathlib import Path
-from unittest.mock import MagicMock, call, patch
-
-import pytest
+from unittest.mock import MagicMock, patch
 
 
 def _get_scripts_path() -> Path:
@@ -97,8 +95,7 @@ class TestMergePrNormalFlow:
         assert any("pr" in args and "ready" in args for args in call_args_list)
         # ステップ 3: gh pr merge
         assert any(
-            "pr" in args and "merge" in args and "--squash" in args
-            for args in call_args_list
+            "pr" in args and "merge" in args and "--squash" in args for args in call_args_list
         )
         # ステップ 6: git worktree remove
         assert any("worktree" in args and "remove" in args for args in call_args_list)
@@ -133,9 +130,7 @@ class TestMergePrNormalFlow:
         """
         m = _import_merge_pr()
 
-        pr_view_response = self._make_pr_view_response(
-            head_ref="feature/48-merge-pr-helper"
-        )
+        pr_view_response = self._make_pr_view_response(head_ref="feature/48-merge-pr-helper")
 
         captured_worktree_remove_args: list[list[str]] = []
 
@@ -218,9 +213,7 @@ class TestMergePrCIFail:
 
         call_args_list = [c[0][0] for c in run_mock.call_args_list]
         # gh pr merge は呼ばれていないこと
-        assert not any(
-            "pr" in args and "merge" in args for args in call_args_list
-        )
+        assert not any("pr" in args and "merge" in args for args in call_args_list)
 
     def test_pending_ci_returns_exit_1(self) -> None:
         """CI が PENDING なら exit 1 を返す（SUCCESS 以外はすべて拒否）。"""
@@ -329,9 +322,7 @@ class TestMergePrAlreadyMerged:
             m.merge_pr(pr_number=48, dry_run=False, repo_root="/repo")
 
         call_args_list = [c[0][0] for c in run_mock.call_args_list]
-        assert not any(
-            "pr" in args and "merge" in args for args in call_args_list
-        )
+        assert not any("pr" in args and "merge" in args for args in call_args_list)
 
     def test_closed_pr_returns_exit_1(self) -> None:
         """CLOSED（close された PR）は exit 1 を返す。"""
@@ -470,9 +461,7 @@ class TestMergePrDryRun:
 
         call_args_list = [c[0][0] for c in run_mock.call_args_list]
         # dry-run 時は gh pr merge を呼ばない
-        assert not any(
-            "pr" in args and "merge" in args for args in call_args_list
-        )
+        assert not any("pr" in args and "merge" in args for args in call_args_list)
 
     def test_dry_run_does_not_call_git_worktree_remove(self) -> None:
         """dry-run 時は git worktree remove が呼ばれない。"""
@@ -498,9 +487,7 @@ class TestMergePrDryRun:
             m.merge_pr(pr_number=48, dry_run=True, repo_root="/repo")
 
         call_args_list = [c[0][0] for c in run_mock.call_args_list]
-        assert not any(
-            "worktree" in args and "remove" in args for args in call_args_list
-        )
+        assert not any("worktree" in args and "remove" in args for args in call_args_list)
 
     def test_dry_run_returns_exit_0(self) -> None:
         """dry-run は必ず exit 0。"""
@@ -595,7 +582,7 @@ class TestCheckPRStatus:
             "statusCheckRollup": [],
         }
 
-        status, state, head_ref = m.check_pr_status(pr_data)
+        status, state, _head_ref = m.check_pr_status(pr_data)
         assert status == "already_merged"
         assert state == "MERGED"
 
@@ -610,7 +597,7 @@ class TestCheckPRStatus:
             "statusCheckRollup": [],
         }
 
-        status, state, head_ref = m.check_pr_status(pr_data)
+        status, _state, _head_ref = m.check_pr_status(pr_data)
         assert status == "error"
 
     def test_ci_failure_returns_ci_failed(self) -> None:
@@ -624,7 +611,7 @@ class TestCheckPRStatus:
             "statusCheckRollup": [{"state": "FAILURE", "context": "ci/test"}],
         }
 
-        status, state, head_ref = m.check_pr_status(pr_data)
+        status, _state, _head_ref = m.check_pr_status(pr_data)
         assert status == "ci_failed"
 
     def test_multiple_checks_last_one_wins(self) -> None:
@@ -641,5 +628,5 @@ class TestCheckPRStatus:
             ],
         }
 
-        status, state, head_ref = m.check_pr_status(pr_data)
+        status, _state, _head_ref = m.check_pr_status(pr_data)
         assert status == "ci_failed"
