@@ -65,3 +65,8 @@ all: lint format type test
 .PHONY: cadence
 cadence:
 	uv run python scripts/check_cadence.py $(ARGS)
+
+.PHONY: merge-pr
+merge-pr:
+	@if [ -z "$(PR)" ]; then echo "Usage: make merge-pr PR=<number> [DRY_RUN=1]"; exit 1; fi
+	uv run python scripts/merge_pr.py --pr $(PR) $(if $(DRY_RUN),--dry-run,)
