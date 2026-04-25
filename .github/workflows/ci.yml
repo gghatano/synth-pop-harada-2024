@@ -48,14 +48,15 @@ jobs:
           --cov-fail-under=0
 
       - name: Smoke benchmark
-        # 1000 世帯 × 1 万反復の軽量版ベンチマーク（フル 20 万反復はローカルで実行）
-        # 閾値: 5 秒以内（CI 環境での性能ゲート）
+        # 1000 世帯 × 1 万反復のエンドツーエンド軽量ベンチマークのみ（5 秒閾値）
+        # μs スケールの per-call ベンチ（test_objective_delta / test_transition_propose）は
+        # CI ランナーのノイズで閾値を割りやすいため、ローカル `make bench` 専用とする
+        # （ローカル M1 で propose 7.5μs、CI Linux で 10.9μs と 1.45 倍ぶれる実測）。
+        # 本格 20 万反復もローカル実行。
         # Issue #33: action-plan §5 リスク対応
         run: >-
           uv run pytest
           tests/benchmarks/test_sa_smoke.py
-          tests/benchmarks/test_objective_delta.py
-          tests/benchmarks/test_transition_propose.py
           -m benchmark
           --benchmark-only
           --benchmark-disable-gc
