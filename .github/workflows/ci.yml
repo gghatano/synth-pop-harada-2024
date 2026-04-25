@@ -47,6 +47,20 @@ jobs:
           --cov-report=term-missing
           --cov-fail-under=0
 
+      - name: Smoke benchmark
+        # 1000 世帯 × 1 万反復の軽量版ベンチマーク（フル 20 万反復はローカルで実行）
+        # 閾値: 5 秒以内（CI 環境での性能ゲート）
+        # Issue #33: action-plan §5 リスク対応
+        run: >-
+          uv run pytest
+          tests/benchmarks/test_sa_smoke.py
+          tests/benchmarks/test_objective_delta.py
+          tests/benchmarks/test_transition_propose.py
+          -m benchmark
+          --benchmark-only
+          --benchmark-disable-gc
+          --benchmark-warmup=off
+
       - name: Upload coverage
         uses: actions/upload-artifact@v4
         with:
