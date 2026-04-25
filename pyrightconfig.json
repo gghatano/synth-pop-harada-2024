@@ -27,6 +27,17 @@
       "reportUnknownLambdaType": "none",
       "reportCallIssue": "none",
       "reportAttributeAccessIssue": "none"
+    },
+    {
+      "root": "tests/benchmarks",
+      "reportUnknownMemberType": "none",
+      "reportUnknownVariableType": "none",
+      "reportUnknownArgumentType": "none",
+      "reportArgumentType": "none",
+      "reportUnknownLambdaType": "none",
+      "reportCallIssue": "none",
+      "reportAttributeAccessIssue": "none",
+      "reportPrivateUsage": "none"
     }
   ]
 }
