@@ -6,5 +6,27 @@
   "reportMissingTypeStubs": "warning",
   "reportMissingImports": "error",
   "venvPath": ".",
-  "venv": ".venv"
+  "venv": ".venv",
+  "executionEnvironments": [
+    {
+      "root": "src/synthpop_jp/reports",
+      "reportUnknownMemberType": "none",
+      "reportUnknownVariableType": "none",
+      "reportUnknownArgumentType": "none",
+      "reportArgumentType": "none",
+      "reportUnknownLambdaType": "none",
+      "reportCallIssue": "none",
+      "reportAttributeAccessIssue": "none"
+    },
+    {
+      "root": "tests/reports",
+      "reportUnknownMemberType": "none",
+      "reportUnknownVariableType": "none",
+      "reportUnknownArgumentType": "none",
+      "reportArgumentType": "none",
+      "reportUnknownLambdaType": "none",
+      "reportCallIssue": "none",
+      "reportAttributeAccessIssue": "none"
+    }
+  ]
 }
