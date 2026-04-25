@@ -324,13 +324,11 @@ class SARunner:
                 arrays,
                 objective,
                 best_arrays,
-                best_score_loaded,
+                _best_score_loaded,
                 rng_state_loaded,
             ) = load_checkpoint(resume_from)
             # rng 状態を復元して乱数列の連続性を保証する
             self._rng.bit_generator.state = rng_state_loaded
-            # transition の arrays 参照を更新する
-            transition.arrays = arrays
 
             state = SAState(
                 iter=ckpt_state.iter,
@@ -354,7 +352,6 @@ class SARunner:
             )
             scores = [initial_score]
             best_arrays = copy.deepcopy(arrays)
-            best_score_loaded = initial_score
             prev_best = initial_score
 
         # patience 管理
@@ -372,9 +369,7 @@ class SARunner:
         log_every = config.log_every_n_iters if config.log_every_n_iters > 0 else 1
 
         # checkpoint の準備
-        use_checkpoint = (
-            config.checkpoint_every_n_iters > 0 and config.checkpoint_dir is not None
-        )
+        use_checkpoint = config.checkpoint_every_n_iters > 0 and config.checkpoint_dir is not None
         ckpt_every = config.checkpoint_every_n_iters if use_checkpoint else 0
 
         # rich.Progress の準備
@@ -503,6 +498,7 @@ class SARunner:
                         # latest.pkl.gz を最新コピーとして保存
                         latest_path = ckpt_dir / "latest.pkl.gz"
                         import shutil
+
                         shutil.copy2(ckpt_path, latest_path)
 
         state.iter = iter_n

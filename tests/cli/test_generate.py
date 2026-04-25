@@ -1,4 +1,4 @@
-"""generate サブコマンドのテスト (Issue #30 Cycle 9).
+"""generate サブコマンドのテスト (Issue #30 Cycle 9, Issue #32 Cycle 9).
 
 typer.testing.CliRunner を使って generate の動作を確認する。
 - Cycle 9a: generate が exit 0 で完走すること
@@ -7,6 +7,7 @@ typer.testing.CliRunner を使って generate の動作を確認する。
 - Cycle 9d: --seed でシードが上書きされること
 - Cycle 9e: metrics.json に best_score が含まれること
 - Cycle 9f: annealing セクションなし config でもデフォルト値で動作すること
+- Cycle 9g (Issue #32): --resume フラグで checkpoint から再開できること
 """
 
 from __future__ import annotations
@@ -191,3 +192,90 @@ class TestGenerateIntegration:
         assert fieldnames is not None
         assert "household_id" in fieldnames
         assert "family_type" in fieldnames
+
+
+@pytest.mark.slow
+class TestGenerateResume:
+    """generate の --resume フラグの統合テスト（Issue #32 Cycle 9）."""
+
+    def _make_config_with_checkpoint(
+        self,
+        tmp_path: Path,
+        checkpoint_dir: Path,
+        max_iters: int = 100,
+        checkpoint_every: int = 50,
+    ) -> Path:
+        """checkpoint 付きの設定 YAML を返す."""
+        config_data: dict[str, object] = {
+            "seed": 42,
+            "input_dir": str(SAMPLE_CASE_DIR),
+            "output_dir": str(tmp_path / "out"),
+            "annealing": {
+                "T0": 100.0,
+                "alpha": 0.99,
+                "max_iters": max_iters,
+                "evals_per_agent": 0,
+                "target_threshold": 0.0,
+                "patience": 0,
+                "trace_enabled": False,
+                "checkpoint_every_n_iters": checkpoint_every,
+                "checkpoint_dir": str(checkpoint_dir),
+            },
+        }
+        config_path = tmp_path / "config_ckpt.yaml"
+        config_path.write_text(yaml.dump(config_data))
+        return config_path
+
+    def test_resume_flag_exits_0(self, tmp_path: Path) -> None:
+        """--resume フラグを渡しても exit 0 で完走すること."""
+        checkpoint_dir = tmp_path / "checkpoints"
+        checkpoint_dir.mkdir()
+
+        # phase 1: checkpoint を作成する
+        config_p1 = self._make_config_with_checkpoint(
+            tmp_path, checkpoint_dir, max_iters=100, checkpoint_every=100
+        )
+        result_p1 = runner.invoke(
+            app, ["generate", "--config", str(config_p1), "--log-level", "ERROR"]
+        )
+        assert result_p1.exit_code == 0, result_p1.output + str(result_p1.exception or "")
+
+        latest_ckpt = checkpoint_dir / "latest.pkl.gz"
+        assert latest_ckpt.exists(), "checkpoint が生成されていない"
+
+        # phase 2: --resume で再開
+        config_p2 = self._make_config_with_checkpoint(
+            tmp_path, checkpoint_dir, max_iters=200, checkpoint_every=0
+        )
+        result_p2 = runner.invoke(
+            app,
+            [
+                "generate",
+                "--config",
+                str(config_p2),
+                "--resume",
+                str(latest_ckpt),
+                "--log-level",
+                "ERROR",
+            ],
+        )
+        assert result_p2.exit_code == 0, result_p2.output + str(result_p2.exception or "")
+
+    def test_resume_invalid_path_exits_1(self, tmp_path: Path) -> None:
+        """存在しない checkpoint パスを --resume に渡すと exit 1 になること."""
+        config_path = _make_config_yaml(tmp_path)
+        nonexistent = tmp_path / "no_such_file.pkl.gz"
+
+        result = runner.invoke(
+            app,
+            [
+                "generate",
+                "--config",
+                str(config_path),
+                "--resume",
+                str(nonexistent),
+                "--log-level",
+                "ERROR",
+            ],
+        )
+        assert result.exit_code == 1, f"exit code は 1 であるべき: got {result.exit_code}"

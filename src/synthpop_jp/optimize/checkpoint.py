@@ -65,6 +65,7 @@ from __future__ import annotations
 
 import gzip
 import pickle
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -80,7 +81,7 @@ def save_checkpoint(
     objective_state: ObjectiveState,
     best_arrays: PopulationArrays,
     best_score: float,
-    rng_state: dict[str, Any],
+    rng_state: Mapping[str, Any],
     path: Path,
 ) -> None:
     """SA の現在状態をチェックポイントファイルに保存する.
@@ -115,7 +116,9 @@ def save_checkpoint(
     >>> from synthpop_jp.optimize.objective import ObjectiveState
     >>> from synthpop_jp.optimize.state import PopulationArrays
     >>> from synthpop_jp.domain.registry import FamilyTypeRegistry, RoleRegistry, SexRegistry
-    >>> family_reg = FamilyTypeRegistry(); role_reg = RoleRegistry(); sex_reg = SexRegistry()
+    >>> family_reg = FamilyTypeRegistry()
+    ... role_reg = RoleRegistry()
+    ... sex_reg = SexRegistry()
     >>> arrays = PopulationArrays.empty(family_reg, role_reg, sex_reg)
     >>> objective = ObjectiveState(arrays=arrays, stats=[], total_score=0.0)
     >>> best_arrays = PopulationArrays.empty(family_reg, role_reg, sex_reg)
@@ -123,9 +126,13 @@ def save_checkpoint(
     >>> state = SAState()
     >>> with tempfile.NamedTemporaryFile(suffix=".pkl.gz") as f:
     ...     save_checkpoint(
-    ...         state=state, arrays=arrays, objective_state=objective,
-    ...         best_arrays=best_arrays, best_score=0.0,
-    ...         rng_state=rng.bit_generator.state, path=Path(f.name)
+    ...         state=state,
+    ...         arrays=arrays,
+    ...         objective_state=objective,
+    ...         best_arrays=best_arrays,
+    ...         best_score=0.0,
+    ...         rng_state=rng.bit_generator.state,
+    ...         path=Path(f.name),
     ...     )
     """
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -177,7 +184,9 @@ def load_checkpoint(
     >>> from synthpop_jp.optimize.objective import ObjectiveState
     >>> from synthpop_jp.optimize.state import PopulationArrays
     >>> from synthpop_jp.domain.registry import FamilyTypeRegistry, RoleRegistry, SexRegistry
-    >>> family_reg = FamilyTypeRegistry(); role_reg = RoleRegistry(); sex_reg = SexRegistry()
+    >>> family_reg = FamilyTypeRegistry()
+    ... role_reg = RoleRegistry()
+    ... sex_reg = SexRegistry()
     >>> arrays = PopulationArrays.empty(family_reg, role_reg, sex_reg)
     >>> objective = ObjectiveState(arrays=arrays, stats=[], total_score=0.0)
     >>> best_arrays = PopulationArrays.empty(family_reg, role_reg, sex_reg)
@@ -186,9 +195,13 @@ def load_checkpoint(
     >>> with tempfile.NamedTemporaryFile(suffix=".pkl.gz", delete=False) as f:
     ...     tmp_path = Path(f.name)
     >>> save_checkpoint(
-    ...     state=state, arrays=arrays, objective_state=objective,
-    ...     best_arrays=best_arrays, best_score=0.0,
-    ...     rng_state=rng.bit_generator.state, path=tmp_path
+    ...     state=state,
+    ...     arrays=arrays,
+    ...     objective_state=objective,
+    ...     best_arrays=best_arrays,
+    ...     best_score=0.0,
+    ...     rng_state=rng.bit_generator.state,
+    ...     path=tmp_path,
     ... )
     >>> loaded = load_checkpoint(tmp_path)
     >>> loaded[0].iter
@@ -196,7 +209,7 @@ def load_checkpoint(
     >>> tmp_path.unlink()
     """
     with gzip.open(path, "rb") as fh:
-        payload: dict[str, Any] = pickle.load(fh)  # noqa: S301
+        payload: dict[str, Any] = pickle.load(fh)
     return _restore_from_payload(payload)
 
 
@@ -212,9 +225,9 @@ def _make_payload(
     objective_state: ObjectiveState,
     best_arrays: PopulationArrays,
     best_score: float,
-    rng_state: dict[str, Any],
+    rng_state: Mapping[str, Any],
 ) -> dict[str, Any]:
-    """保存用 dict を構築する."""
+    """Build payload dict for saving."""
     return {
         "state": {
             "iter": state.iter,
@@ -234,7 +247,7 @@ def _make_payload(
 def _restore_from_payload(
     payload: dict[str, Any],
 ) -> tuple[SAState, PopulationArrays, ObjectiveState, PopulationArrays, float, dict[str, Any]]:
-    """dict から状態を復元する."""
+    """Restore SA state from payload dict."""
     state_dict = payload["state"]
     state = SAState(
         iter=state_dict["iter"],
@@ -252,30 +265,36 @@ def _restore_from_payload(
 
 
 def _serialize_population_arrays(arrays: PopulationArrays) -> dict[str, Any]:
-    """PopulationArrays を dict にシリアライズする."""
+    """Serialize PopulationArrays into a dict."""
     return {
         "age": arrays.age,
         "sex": arrays.sex,
         "role": arrays.role,
         "household_id": arrays.household_id,
         "family_type": arrays.family_type,
-        "family_reg": arrays._family_reg,
-        "role_reg": arrays._role_reg,
-        "sex_reg": arrays._sex_reg,
+        "family_reg": arrays.family_reg,
+        "role_reg": arrays.role_reg,
+        "sex_reg": arrays.sex_reg,
     }
 
 
 def _deserialize_population_arrays(d: dict[str, Any]) -> PopulationArrays:
-    """dict から PopulationArrays を復元する."""
+    """Restore PopulationArrays from serialized dict."""
+    from synthpop_jp.domain.registry import FamilyTypeRegistry, RoleRegistry, SexRegistry
+
+    family_reg: FamilyTypeRegistry = d["family_reg"]
+    role_reg: RoleRegistry = d["role_reg"]
+    sex_reg: SexRegistry = d["sex_reg"]
+
     return PopulationArrays(
         age=d["age"],
         sex=d["sex"],
         role=d["role"],
         household_id=d["household_id"],
         family_type=d["family_type"],
-        _family_reg=d["family_reg"],
-        _role_reg=d["role_reg"],
-        _sex_reg=d["sex_reg"],
+        _family_reg=family_reg,
+        _role_reg=role_reg,
+        _sex_reg=sex_reg,
     )
 
 
@@ -295,10 +314,8 @@ def _serialize_objective_state(objective: ObjectiveState) -> dict[str, Any]:
     }
 
 
-def _deserialize_objective_state(
-    d: dict[str, Any], arrays: PopulationArrays
-) -> ObjectiveState:
-    """dict から ObjectiveState を復元する.
+def _deserialize_objective_state(d: dict[str, Any], arrays: PopulationArrays) -> ObjectiveState:
+    """Restore ObjectiveState from serialized dict.
 
     復元された ``ObjectiveState`` の ``arrays`` フィールドは
     引数 ``arrays`` への参照となる（コピーしない）。

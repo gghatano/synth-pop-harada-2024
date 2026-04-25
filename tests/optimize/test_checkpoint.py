@@ -18,7 +18,6 @@ import time
 from pathlib import Path
 
 import numpy as np
-import pytest
 
 from synthpop_jp.config import AnnealingConfig
 from synthpop_jp.domain.household import Household
@@ -108,16 +107,6 @@ def make_couple_arrays() -> PopulationArrays:
         for i in range(3)
     ]
     return PopulationArrays.from_households(households, family_reg, role_reg, sex_reg)
-
-
-def _find_repo_root() -> Path:
-    """pyproject.toml を探してリポジトリルートを返す."""
-    here = Path(__file__).resolve()
-    for parent in here.parents:
-        if (parent / "pyproject.toml").exists():
-            return parent
-    msg = "pyproject.toml が見つかりません"
-    raise FileNotFoundError(msg)
 
 
 # ---------------------------------------------------------------------------
@@ -287,7 +276,9 @@ class TestObjectiveStateRoundTrip:
     def test_objective_total_score_preserved(self, tmp_path: Path) -> None:
         """total_score が保持される."""
         arrays = make_small_arrays(10)
-        from synthpop_jp.io.schemas import AgeDiffCoupleRow, AgeDiffParentChildRow, DemographicByAgeSexRow
+        from synthpop_jp.io.schemas import (
+            DemographicByAgeSexRow,
+        )
 
         demo_rows = [
             DemographicByAgeSexRow(sex="M", age=30, count=5),
@@ -491,7 +482,6 @@ class TestSARunnerCheckpointHook:
     ) -> tuple[SARunner, PopulationArrays, ObjectiveState, AnnealingConfig, ExponentialCooling]:
         """テスト用の SA 実行セットアップを返す."""
         from synthpop_jp.io.schemas import DemographicByAgeSexRow
-        from synthpop_jp.optimize.transitions import AgeChangeTransition
 
         arrays = make_small_arrays(10)
         demo_rows = [
@@ -910,12 +900,8 @@ class TestCheckpointPerformance:
         ]
         arrays = PopulationArrays.from_households(households, family_reg, role_reg, sex_reg)
         demo_rows = [
-            DemographicByAgeSexRow(sex="M", age=age, count=20)
-            for age in range(0, 100, 5)
-        ] + [
-            DemographicByAgeSexRow(sex="F", age=age, count=20)
-            for age in range(0, 100, 5)
-        ]
+            DemographicByAgeSexRow(sex="M", age=age, count=20) for age in range(0, 100, 5)
+        ] + [DemographicByAgeSexRow(sex="F", age=age, count=20) for age in range(0, 100, 5)]
         objective = ObjectiveState.from_arrays(
             arrays=arrays,
             age_diff_parent_child=[],
