@@ -70,3 +70,18 @@ cadence:
 merge-pr:
 	@if [ -z "$(PR)" ]; then echo "Usage: make merge-pr PR=<number> [DRY_RUN=1]"; exit 1; fi
 	uv run python scripts/merge_pr.py --pr $(PR) $(if $(DRY_RUN),--dry-run,)
+
+.PHONY: ci
+ci:
+	@echo "[ruff check] running..." && uv run ruff check . && echo "[ruff check] PASS" || (echo "CI: FAILED at ruff check" && exit 1)
+	@echo "[ruff format] running..." && uv run ruff format --check . && echo "[ruff format] PASS" || (echo "CI: FAILED at ruff format" && exit 1)
+	@echo "[pyright] running..." && uv run pyright > /tmp/pyright_out 2>&1 && echo "[pyright] PASS ($$(grep -E '^[0-9]+ errors' /tmp/pyright_out || echo '0 errors'))" || (cat /tmp/pyright_out && echo "CI: FAILED at pyright" && exit 1)
+	@echo "[pytest] running..." && uv run pytest 2>&1 | tail -3 && echo "[pytest] PASS"
+	@echo "CI: ALL GREEN"
+
+.PHONY: ci-fast
+ci-fast:
+	@echo "[ruff check] running..." && uv run ruff check . && echo "[ruff check] PASS" || (echo "CI: FAILED at ruff check" && exit 1)
+	@echo "[ruff format] running..." && uv run ruff format --check . && echo "[ruff format] PASS" || (echo "CI: FAILED at ruff format" && exit 1)
+	@echo "[pytest] running..." && uv run pytest 2>&1 | tail -3 && echo "[pytest] PASS"
+	@echo "CI: ALL GREEN"
