@@ -55,6 +55,12 @@ class AnnealingConfig(BaseModel):
     trace_enabled : bool
         True のとき trace.jsonl を書き出す。False のとき trace を書き出さない。
         デフォルト True。
+    checkpoint_every_n_iters : int
+        チェックポイントを保存する反復間隔。0 以下は無効（保存しない）。
+        デフォルト 10000。
+    checkpoint_dir : Path | None
+        チェックポイントファイルの保存先ディレクトリ。
+        None のときチェックポイントを保存しない。デフォルト None。
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -67,6 +73,8 @@ class AnnealingConfig(BaseModel):
     patience: int = 0
     log_every_n_iters: int = 1000
     trace_enabled: bool = True
+    checkpoint_every_n_iters: int = 10000
+    checkpoint_dir: Path | None = None
 
     @field_validator("T0")
     @classmethod

@@ -275,6 +275,7 @@ class SARunner:
         config: AnnealingConfig,
         trace_path: Path | None = None,
         progress_enabled: bool = True,
+        resume_from: Path | None = None,
     ) -> SAResult:
         """SA ループを実行して SAResult を返す.
 
@@ -282,10 +283,15 @@ class SARunner:
         ----------
         arrays : PopulationArrays
             最適化対象の人口配列（in-place 更新される）。
+            ``resume_from`` を指定した場合、この引数は無視され
+            チェックポイントの配列が使われる。
         objective : ObjectiveState
             目的関数の状態オブジェクト。``propose_change`` と ``apply_change`` を使う。
+            ``resume_from`` を指定した場合、この引数は無視され
+            チェックポイントの状態が使われる。
         transition : AgeChangeTransition
             遷移演算子。``propose()`` で ``(person_idx, new_age)`` を返す。
+            ``resume_from`` 指定時も transition は引き続き使用する。
         cooling : CoolingSchedule
             冷却スケジュール。``get_temperature(iter)`` で温度を取得する。
         config : AnnealingConfig
@@ -296,31 +302,60 @@ class SARunner:
         progress_enabled : bool
             True のとき rich.Progress 進捗バーを表示する。デフォルト True。
             CLI ``--dry-run`` または ``--log-level ERROR`` のとき False を渡す。
+        resume_from : Path | None
+            再開するチェックポイントファイルのパス（.pkl.gz）。
+            指定した場合、``arrays``・``objective``・rng 状態をチェックポイントから復元し、
+            チェックポイントの ``iter`` から反復を継続する。デフォルト None。
 
         Returns
         -------
         SAResult
             最良配列・最終状態・スコア履歴を含む実行結果。
         """
+        from synthpop_jp.optimize.checkpoint import load_checkpoint, save_checkpoint
         from synthpop_jp.optimize.trace import TraceEvent, TraceWriter
 
-        # 初期状態
-        initial_score = float(objective.total_score)
-        state = SAState(
-            iter=0,
-            current_score=initial_score,
-            best_score=initial_score,
-            n_accepted=0,
-            n_total=0,
-        )
-        scores: list[float] = [initial_score]
+        # --- resume_from 処理 ---
+        # checkpoint から状態を復元する場合は arrays, objective, rng_state を上書きする
+        iter_start = 0
+        if resume_from is not None:
+            (
+                ckpt_state,
+                arrays,
+                objective,
+                best_arrays,
+                _best_score_loaded,
+                rng_state_loaded,
+            ) = load_checkpoint(resume_from)
+            # rng 状態を復元して乱数列の連続性を保証する
+            self._rng.bit_generator.state = rng_state_loaded
 
-        # best_arrays は初期状態のコピーを持つ
-        best_arrays = copy.deepcopy(arrays)
+            state = SAState(
+                iter=ckpt_state.iter,
+                current_score=ckpt_state.current_score,
+                best_score=ckpt_state.best_score,
+                n_accepted=ckpt_state.n_accepted,
+                n_total=ckpt_state.n_total,
+            )
+            scores: list[float] = [state.best_score]
+            iter_start = ckpt_state.iter
+            prev_best = state.best_score
+        else:
+            # 初期状態
+            initial_score = float(objective.total_score)
+            state = SAState(
+                iter=0,
+                current_score=initial_score,
+                best_score=initial_score,
+                n_accepted=0,
+                n_total=0,
+            )
+            scores = [initial_score]
+            best_arrays = copy.deepcopy(arrays)
+            prev_best = initial_score
 
         # patience 管理
         patience_counter = 0
-        prev_best = initial_score
 
         # evals_per_agent の上限計算
         n_persons = arrays.n_persons
@@ -332,6 +367,10 @@ class SARunner:
         # trace writer の準備
         use_trace = config.trace_enabled and trace_path is not None
         log_every = config.log_every_n_iters if config.log_every_n_iters > 0 else 1
+
+        # checkpoint の準備
+        use_checkpoint = config.checkpoint_every_n_iters > 0 and config.checkpoint_dir is not None
+        ckpt_every = config.checkpoint_every_n_iters if use_checkpoint else 0
 
         # rich.Progress の準備
         _progress_ctx = _build_progress(
@@ -355,7 +394,7 @@ class SARunner:
                 writer_ctx = _NullWriter()
 
             with writer_ctx as writer:
-                iter_n = 0
+                iter_n = iter_start
                 while iter_n < max_iters:
                     # evals_per_agent 停止
                     if eval_limit > 0 and iter_n >= eval_limit:
@@ -441,6 +480,26 @@ class SARunner:
                                 accept_rate=accept_rate,
                             )
                         recent_accepted = 0
+
+                    # checkpoint_every_n_iters ごとにチェックポイントを保存
+                    if use_checkpoint and ckpt_every > 0 and iter_n % ckpt_every == 0:
+                        ckpt_dir = config.checkpoint_dir
+                        assert ckpt_dir is not None  # use_checkpoint が True なら保証
+                        ckpt_path = ckpt_dir / f"iter_{iter_n}.pkl.gz"
+                        save_checkpoint(
+                            state=state,
+                            arrays=arrays,
+                            objective_state=objective,
+                            best_arrays=best_arrays,
+                            best_score=state.best_score,
+                            rng_state=self._rng.bit_generator.state,
+                            path=ckpt_path,
+                        )
+                        # latest.pkl.gz を最新コピーとして保存
+                        latest_path = ckpt_dir / "latest.pkl.gz"
+                        import shutil
+
+                        shutil.copy2(ckpt_path, latest_path)
 
         state.iter = iter_n
         return SAResult(

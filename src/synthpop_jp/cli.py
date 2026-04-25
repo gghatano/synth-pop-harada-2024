@@ -297,6 +297,14 @@ def generate(
         LogLevel,
         typer.Option("--log-level", help="ログレベル。"),
     ] = LogLevel.INFO,
+    resume: Annotated[
+        Path | None,
+        typer.Option(
+            "--resume",
+            help="再開するチェックポイントファイルのパス（.pkl.gz）。"
+            "指定すると、直近 checkpoint から SA を再開する。",
+        ),
+    ] = None,
 ) -> None:
     """SA（シミュレーテッドアニーリング）最適化付きの合成人口生成.
 
@@ -453,10 +461,18 @@ def generate(
     cooling = ExponentialCooling(T0=annealing_cfg.T0, alpha=annealing_cfg.alpha)
     runner_sa = SARunner(rng=seed_reg.rng("sa_runner"))
 
+    # --resume の事前検証（ファイルが存在しない場合は exit 1）
+    if resume is not None and not resume.exists():
+        err_console.print(f"[red]エラー:[/red] checkpoint ファイルが見つかりません: {resume}")
+        raise typer.Exit(code=1)
+
     # trace.jsonl の書き出し先は dry_run でない場合にのみ設定する
     # progress_enabled は dry_run=True または log_level=ERROR のとき抑制する
     trace_path_for_run = output_dir / "trace.jsonl" if not dry_run else None
     progress_enabled_for_run = not dry_run and log_level != LogLevel.ERROR
+
+    if resume is not None:
+        console.print(f"[bold]checkpoint から再開:[/bold] {resume}")
 
     sa_result = runner_sa.run(
         arrays=arrays,
@@ -466,6 +482,7 @@ def generate(
         config=annealing_cfg,
         trace_path=trace_path_for_run,
         progress_enabled=progress_enabled_for_run,
+        resume_from=resume,
     )
 
     best_score = sa_result.final_state.best_score
