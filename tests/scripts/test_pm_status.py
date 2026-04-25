@@ -24,8 +24,10 @@ def _get_scripts_path() -> Path:
 # Helpers: dynamically import pm_status from scripts/
 # ---------------------------------------------------------------------------
 
+
 def _import_pm_status() -> types.ModuleType:
     import importlib.util
+    import sys
 
     scripts_path = _get_scripts_path()
     pm_path = scripts_path / "pm_status.py"
@@ -33,6 +35,8 @@ def _import_pm_status() -> types.ModuleType:
     assert module_spec is not None
     assert module_spec.loader is not None
     module = importlib.util.module_from_spec(module_spec)
+    # dataclass requires the module to be in sys.modules so __module__ lookup works
+    sys.modules["pm_status"] = module
     module_spec.loader.exec_module(module)  # type: ignore[union-attr]
     return module
 
@@ -94,7 +98,10 @@ class TestCollectWorktreeInfo:
         def mock_run(args: list[str], cwd: str | None = None) -> str:
             cmd = " ".join(args)
             if "worktree list" in cmd:
-                return "/repo/main  abc1234  [main]\n/repo/gitworktree/feature-40  def5678  [feature/40-pm-dashboard]\n"
+                return (
+                    "/repo/main  abc1234  [main]\n"
+                    "/repo/gitworktree/feature-40  def5678  [feature/40-pm-dashboard]\n"
+                )
             if "rev-list" in cmd and "origin/develop" in cmd:
                 return "3\n"
             if "status --porcelain" in cmd:
@@ -102,13 +109,16 @@ class TestCollectWorktreeInfo:
             if "log -1 --format=%ct" in cmd:
                 # Return unix timestamp from 5 minutes ago
                 import time
+
                 return str(int(time.time()) - 300)
             return ""
 
-        with patch.object(pm, "_run_cmd", side_effect=mock_run):
-            with patch.object(pm, "_get_issue_comment_counts", return_value=(True, 2)):
-                with patch.object(pm, "_get_pr_for_branch", return_value=(42, "DRAFT")):
-                    infos = pm.collect_worktree_info()
+        with (
+            patch.object(pm, "_run_cmd", side_effect=mock_run),
+            patch.object(pm, "_get_issue_comment_counts", return_value=(True, 2)),
+            patch.object(pm, "_get_pr_for_branch", return_value=(42, "DRAFT")),
+        ):
+            infos = pm.collect_worktree_info()
 
         # Should only include feature worktrees (not main)
         assert len(infos) == 1
@@ -192,22 +202,24 @@ class TestCollectOpenIssues:
     def test_collect_open_issues_with_phase_filter(self) -> None:
         pm = _import_pm_status()
 
-        gh_output = json.dumps([
-            {
-                "number": 40,
-                "title": "[phase-2] PM dashboard",
-                "state": "OPEN",
-                "labels": [{"name": "phase-2"}],
-                "body": "## blocked_by\n- #38\n",
-            },
-            {
-                "number": 39,
-                "title": "[phase-2] another issue",
-                "state": "OPEN",
-                "labels": [{"name": "phase-2"}],
-                "body": "",
-            },
-        ])
+        gh_output = json.dumps(
+            [
+                {
+                    "number": 40,
+                    "title": "[phase-2] PM dashboard",
+                    "state": "OPEN",
+                    "labels": [{"name": "phase-2"}],
+                    "body": "## blocked_by\n- #38\n",
+                },
+                {
+                    "number": 39,
+                    "title": "[phase-2] another issue",
+                    "state": "OPEN",
+                    "labels": [{"name": "phase-2"}],
+                    "body": "",
+                },
+            ]
+        )
 
         def mock_run(args: list[str], cwd: str | None = None) -> str:
             if "issue list" in " ".join(args):
@@ -235,15 +247,17 @@ class TestCollectOpenIssues:
     def test_collect_open_issues_no_phase_returns_all(self) -> None:
         pm = _import_pm_status()
 
-        gh_output = json.dumps([
-            {
-                "number": 10,
-                "title": "some issue",
-                "state": "OPEN",
-                "labels": [{"name": "phase-1"}],
-                "body": "",
-            },
-        ])
+        gh_output = json.dumps(
+            [
+                {
+                    "number": 10,
+                    "title": "some issue",
+                    "state": "OPEN",
+                    "labels": [{"name": "phase-1"}],
+                    "body": "",
+                },
+            ]
+        )
 
         def mock_run(args: list[str], cwd: str | None = None) -> str:
             if "issue list" in " ".join(args):
@@ -278,10 +292,12 @@ class TestCollectRecentMergedPRs:
     def test_collect_recent_merged_prs_returns_list(self) -> None:
         pm = _import_pm_status()
 
-        gh_output = json.dumps([
-            {"number": 5, "title": "feat: something", "mergedAt": "2024-01-01T10:00:00Z"},
-            {"number": 4, "title": "fix: bug", "mergedAt": "2024-01-01T09:00:00Z"},
-        ])
+        gh_output = json.dumps(
+            [
+                {"number": 5, "title": "feat: something", "mergedAt": "2024-01-01T10:00:00Z"},
+                {"number": 4, "title": "fix: bug", "mergedAt": "2024-01-01T09:00:00Z"},
+            ]
+        )
 
         def mock_run(args: list[str], cwd: str | None = None) -> str:
             if "pr list" in " ".join(args):
@@ -310,10 +326,12 @@ class TestCollectRecentMergedPRs:
     def test_collect_recent_merged_prs_respects_limit(self) -> None:
         pm = _import_pm_status()
 
-        gh_output = json.dumps([
-            {"number": i, "title": f"pr {i}", "mergedAt": "2024-01-01T00:00:00Z"}
-            for i in range(10)
-        ])
+        gh_output = json.dumps(
+            [
+                {"number": i, "title": f"pr {i}", "mergedAt": "2024-01-01T00:00:00Z"}
+                for i in range(10)
+            ]
+        )
 
         def mock_run(args: list[str], cwd: str | None = None) -> str:
             if "pr list" in " ".join(args):
@@ -515,21 +533,25 @@ class TestMainFunction:
     def test_main_with_no_args_runs(self) -> None:
         pm = _import_pm_status()
 
-        with patch.object(pm, "collect_worktree_info", return_value=[]):
-            with patch.object(pm, "collect_open_issues", return_value=[]):
-                with patch.object(pm, "collect_recent_merged_prs", return_value=[]):
-                    # Should not raise
-                    pm.main(["--stale-minutes", "10"])
+        with (
+            patch.object(pm, "collect_worktree_info", return_value=[]),
+            patch.object(pm, "collect_open_issues", return_value=[]),
+            patch.object(pm, "collect_recent_merged_prs", return_value=[]),
+        ):
+            # Should not raise
+            pm.main(["--stale-minutes", "10"])
 
     def test_main_no_prs_flag(self) -> None:
         pm = _import_pm_status()
 
-        with patch.object(pm, "collect_worktree_info", return_value=[]) as _:
-            with patch.object(pm, "collect_open_issues", return_value=[]) as _:
-                collect_prs_mock = MagicMock(return_value=[])
-                with patch.object(pm, "collect_recent_merged_prs", collect_prs_mock):
-                    pm.main(["--no-prs"])
-                    collect_prs_mock.assert_not_called()
+        collect_prs_mock = MagicMock(return_value=[])
+        with (
+            patch.object(pm, "collect_worktree_info", return_value=[]),
+            patch.object(pm, "collect_open_issues", return_value=[]),
+            patch.object(pm, "collect_recent_merged_prs", collect_prs_mock),
+        ):
+            pm.main(["--no-prs"])
+            collect_prs_mock.assert_not_called()
 
     def test_main_json_output(self, capsys: pytest.CaptureFixture[str]) -> None:
         pm = _import_pm_status()
@@ -546,10 +568,12 @@ class TestMainFunction:
             pr_state=None,
         )
 
-        with patch.object(pm, "collect_worktree_info", return_value=[wt]):
-            with patch.object(pm, "collect_open_issues", return_value=[]):
-                with patch.object(pm, "collect_recent_merged_prs", return_value=[]):
-                    pm.main(["--json"])
+        with (
+            patch.object(pm, "collect_worktree_info", return_value=[wt]),
+            patch.object(pm, "collect_open_issues", return_value=[]),
+            patch.object(pm, "collect_recent_merged_prs", return_value=[]),
+        ):
+            pm.main(["--json"])
 
         captured = capsys.readouterr()
         data = json.loads(captured.out)
@@ -561,12 +585,14 @@ class TestMainFunction:
     def test_main_phase_filter_passed_to_collect_issues(self) -> None:
         pm = _import_pm_status()
 
-        with patch.object(pm, "collect_worktree_info", return_value=[]):
-            collect_issues_mock = MagicMock(return_value=[])
-            with patch.object(pm, "collect_open_issues", collect_issues_mock):
-                with patch.object(pm, "collect_recent_merged_prs", return_value=[]):
-                    pm.main(["--phase", "2"])
-                    collect_issues_mock.assert_called_once_with(phase=2)
+        collect_issues_mock = MagicMock(return_value=[])
+        with (
+            patch.object(pm, "collect_worktree_info", return_value=[]),
+            patch.object(pm, "collect_open_issues", collect_issues_mock),
+            patch.object(pm, "collect_recent_merged_prs", return_value=[]),
+        ):
+            pm.main(["--phase", "2"])
+            collect_issues_mock.assert_called_once_with(phase=2)
 
     def test_main_stale_minutes_passed_to_build_table(self) -> None:
         pm = _import_pm_status()
@@ -583,10 +609,12 @@ class TestMainFunction:
             pr_state=None,
         )
 
-        with patch.object(pm, "collect_worktree_info", return_value=[wt]):
-            with patch.object(pm, "collect_open_issues", return_value=[]):
-                with patch.object(pm, "collect_recent_merged_prs", return_value=[]):
-                    build_mock = MagicMock(return_value=MagicMock())
-                    with patch.object(pm, "build_worktree_table", build_mock):
-                        pm.main(["--stale-minutes", "5"])
-                        build_mock.assert_called_once_with([wt], stale_minutes=5)
+        build_mock = MagicMock(return_value=MagicMock())
+        with (
+            patch.object(pm, "collect_worktree_info", return_value=[wt]),
+            patch.object(pm, "collect_open_issues", return_value=[]),
+            patch.object(pm, "collect_recent_merged_prs", return_value=[]),
+            patch.object(pm, "build_worktree_table", build_mock),
+        ):
+            pm.main(["--stale-minutes", "5"])
+            build_mock.assert_called_once_with([wt], stale_minutes=5)

@@ -10,8 +10,9 @@
 #   make quickstart  # Phase 1 で実装（synthpop-jp quickstart）
 #   make docs        # Phase 4 で実装（mkdocs build）
 #   make paper       # Phase 6 で実装（paper_results 再現）
+#   make pm          # PM status ダッシュボード（並列 Agent 進捗確認）
 
-.PHONY: help setup lint format type test bench quickstart docs paper all
+.PHONY: help setup lint format type test bench quickstart docs paper pm all
 
 help:
 	@echo "Available targets:"
@@ -24,6 +25,7 @@ help:
 	@echo "  quickstart  Run synthpop-jp quickstart (Phase 1)"
 	@echo "  docs        Build mkdocs site (Phase 4)"
 	@echo "  paper       Reproduce paper_results (Phase 6)"
+	@echo "  pm          PM status dashboard (parallel Agent monitoring)"
 
 setup:
 	uv sync --frozen
@@ -53,5 +55,9 @@ docs:
 paper:
 	@echo "[Phase 6] paper_results reproduction — not yet implemented"
 	@exit 1
+
+.PHONY: pm
+pm:
+	uv run python scripts/pm_status.py $(ARGS)
 
 all: lint format type test
