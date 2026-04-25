@@ -1,4 +1,4 @@
-"""scripts/check_cadence.py
+"""scripts/check_cadence.py.
 
 uncommitted 変更の規模を確認し、閾値超過なら警告して exit 1 する。
 
@@ -19,14 +19,13 @@ import subprocess
 import sys
 from pathlib import Path
 
-
 # デフォルト閾値
 DEFAULT_THRESHOLD_FILES = 5
 DEFAULT_THRESHOLD_LINES = 200
 
 
 def _run_git(args: list[str], cwd: Path) -> str:
-    """git コマンドを実行してstdoutを返す。失敗したら RuntimeError を上げる."""
+    """Git コマンドを実行してstdoutを返す。失敗したら RuntimeError を上げる."""
     result = subprocess.run(
         ["git", *args],
         capture_output=True,
@@ -42,7 +41,7 @@ def _run_git(args: list[str], cwd: Path) -> str:
 
 
 def count_uncommitted_files(worktree: Path) -> int:
-    """worktree 内の uncommitted ファイル数を返す。
+    """Worktree 内の uncommitted ファイル数を返す.
 
     tracked の変更（M, D, A など）と untracked (??) の両方を数える。
     """
@@ -52,7 +51,7 @@ def count_uncommitted_files(worktree: Path) -> int:
 
 
 def count_uncommitted_lines(worktree: Path) -> int:
-    """worktree 内の uncommitted 追加行数を返す。
+    """Worktree 内の uncommitted 追加行数を返す.
 
     git diff --numstat でステージ済み・未ステージ両方を合計する。
     untracked ファイルは別途 wc -l で数える。
@@ -95,9 +94,10 @@ def check_cadence(
     threshold_files: int = DEFAULT_THRESHOLD_FILES,
     threshold_lines: int = DEFAULT_THRESHOLD_LINES,
 ) -> tuple[bool, str]:
-    """commit cadence の状態を確認する。
+    """Commit cadence の状態を確認する.
 
-    Returns:
+    Returns
+    -------
         (ok, message): ok=True なら閾値以内、False なら超過。
     """
     n_files = count_uncommitted_files(worktree)
@@ -105,13 +105,9 @@ def check_cadence(
 
     violations: list[str] = []
     if n_files > threshold_files:
-        violations.append(
-            f"uncommitted files: {n_files} (threshold: {threshold_files})"
-        )
+        violations.append(f"uncommitted files: {n_files} (threshold: {threshold_files})")
     if n_lines > threshold_lines:
-        violations.append(
-            f"uncommitted lines: {n_lines} (threshold: {threshold_lines})"
-        )
+        violations.append(f"uncommitted lines: {n_lines} (threshold: {threshold_lines})")
 
     if violations:
         msg_lines = [

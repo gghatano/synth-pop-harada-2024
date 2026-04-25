@@ -10,10 +10,7 @@ from __future__ import annotations
 
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
-
-import pytest
 
 
 def _find_repo_root() -> Path:
