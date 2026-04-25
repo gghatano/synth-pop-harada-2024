@@ -11,6 +11,7 @@ import json
 import sys
 import types
 from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 
@@ -575,7 +576,7 @@ class TestCheckPRStatus:
         """MERGED → ('already_merged', state, head_ref)"""
         m = _import_merge_pr()
 
-        pr_data = {
+        pr_data: dict[str, Any] = {
             "state": "MERGED",
             "mergeable": "UNKNOWN",
             "headRefName": "feature/48-merge-pr-helper",
@@ -590,7 +591,7 @@ class TestCheckPRStatus:
         """CLOSED → ('error', state, head_ref)"""
         m = _import_merge_pr()
 
-        pr_data = {
+        pr_data: dict[str, Any] = {
             "state": "CLOSED",
             "mergeable": "UNKNOWN",
             "headRefName": "feature/48-merge-pr-helper",
