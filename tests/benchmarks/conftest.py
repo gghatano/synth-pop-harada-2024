@@ -14,7 +14,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-import numpy as np
 import pytest
 
 from synthpop_jp.config import AnnealingConfig
@@ -41,7 +40,6 @@ from synthpop_jp.optimize.objective import ObjectiveState
 from synthpop_jp.optimize.state import PopulationArrays
 from synthpop_jp.optimize.transitions import AgeChangeTransition
 from synthpop_jp.rng import SeedRegistry
-
 
 # ---------------------------------------------------------------------------
 # pyproject.toml 探索によるリポジトリルート解決

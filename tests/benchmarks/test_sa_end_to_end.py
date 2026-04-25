@@ -21,7 +21,6 @@ import copy
 import pytest
 
 from synthpop_jp.optimize.annealing import SAResult, SARunner
-from synthpop_jp.optimize.objective import ObjectiveState
 
 from .conftest import SASetup
 
