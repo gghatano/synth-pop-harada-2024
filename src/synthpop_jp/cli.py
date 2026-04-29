@@ -812,16 +812,156 @@ def improve(config: str = "configs/base.yaml", trials: int = 10) -> None:
 
 
 @app.command()
-def compare(experiment: str) -> None:
-    """Compare multiple runs of an experiment (Phase 3b onward).
+def compare(
+    configs: Annotated[
+        list[Path],
+        typer.Option("--configs", "-c", help="比較する config YAML（2 個以上）。"),
+    ],
+    n_seeds: Annotated[
+        int,
+        typer.Option("--n-seeds", help="各 config を実行する seed 数 (1〜30)。"),
+    ] = 10,
+    output_dir: Annotated[
+        Path,
+        typer.Option("--output-dir", help="比較結果の出力先ディレクトリ。"),
+    ] = Path("outputs/compare"),
+    metrics: Annotated[
+        str,
+        typer.Option(
+            "--metrics",
+            help="比較する metric キーのカンマ区切り。デフォルト: aggregate.l1.total。",
+        ),
+    ] = "aggregate.l1.total",
+    log_level: Annotated[
+        LogLevel,
+        typer.Option("--log-level", help="ログレベル。"),
+    ] = LogLevel.INFO,
+) -> None:
+    """複数 config × n_seeds の SA を実行し、統計検定付きで比較する (Issue #80).
 
-    Parameters
-    ----------
-    experiment : str
-        Path to an experiment configuration.
+    各 config を ``n_seeds`` 個の独立 seed で実行し、指定された metric の
+    Welch's t / Wilcoxon signed-rank + Holm 補正を計算する。
+    結果は ``output_dir/compare.json`` (機械可読) と ``compare.md`` (人間可読)
+    に書き出す。
     """
-    del experiment
-    _not_yet("compare", "Phase 3b")
+    import logging
+
+    from synthpop_jp.compare.report import render_compare_json, render_compare_md
+    from synthpop_jp.compare.runner import run_seed_sweep
+    from synthpop_jp.compare.stats import (
+        holm_correction,
+        welch_t_test,
+        wilcoxon_signed_rank,
+    )
+    from synthpop_jp.config import Settings
+
+    logging.basicConfig(level=getattr(logging, log_level.value))
+
+    if len(configs) < 2:
+        err_console.print("[red]エラー:[/red] --configs を 2 個以上指定してください。")
+        raise typer.Exit(code=1)
+    if not (1 <= n_seeds <= 30):
+        err_console.print(f"[red]エラー:[/red] --n-seeds は 1〜30 の範囲。got={n_seeds}")
+        raise typer.Exit(code=1)
+
+    metric_keys = [m.strip() for m in metrics.split(",") if m.strip()]
+    if not metric_keys:
+        err_console.print("[red]エラー:[/red] --metrics が空です。")
+        raise typer.Exit(code=1)
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    console.print(
+        f"[bold]比較実行:[/bold] {len(configs)} configs × {n_seeds} seeds, metrics={metric_keys}"
+    )
+
+    # 各 config で seed sweep を実行
+    results_per_config: list[list[dict[str, float]]] = []
+    for i, cfg_path in enumerate(configs):
+        console.print(f"[cyan]config_{i}:[/cyan] {cfg_path}")
+        cfg_settings = Settings.from_yaml(cfg_path)
+        cfg_settings = cfg_settings.model_copy(update={"output_dir": output_dir / f"config_{i}"})
+        results = run_seed_sweep(cfg_settings, n_seeds=n_seeds, base_seed=cfg_settings.seed)
+        results_per_config.append(results)
+
+    # 統計検定 (configs[0] vs configs[1])
+    test_results: dict[str, dict[str, dict[str, float]]] = {}
+    welch_p_values: list[float] = []
+    for metric in metric_keys:
+        a = [r.get(metric, float("nan")) for r in results_per_config[0]]
+        b = [r.get(metric, float("nan")) for r in results_per_config[1]]
+        finite_a = [v for v in a if v == v]
+        finite_b = [v for v in b if v == v]
+        tests: dict[str, dict[str, float]] = {}
+        if len(finite_a) >= 2 and len(finite_b) >= 2:
+            t_stat, t_p = welch_t_test(finite_a, finite_b)
+            tests["welch_t"] = {"statistic": t_stat, "p_value": t_p}
+            welch_p_values.append(t_p)
+        else:
+            tests["welch_t"] = {"statistic": float("nan"), "p_value": float("nan")}
+            welch_p_values.append(float("nan"))
+        if len(a) == len(b) and len(a) >= 1:
+            paired = [(x, y) for x, y in zip(a, b, strict=True) if x == x and y == y]
+            if paired:
+                paired_a = [p[0] for p in paired]
+                paired_b = [p[1] for p in paired]
+                try:
+                    w_stat, w_p = wilcoxon_signed_rank(paired_a, paired_b)
+                    tests["wilcoxon"] = {"statistic": w_stat, "p_value": w_p}
+                except ValueError:
+                    tests["wilcoxon"] = {
+                        "statistic": float("nan"),
+                        "p_value": float("nan"),
+                    }
+            else:
+                tests["wilcoxon"] = {
+                    "statistic": float("nan"),
+                    "p_value": float("nan"),
+                }
+        else:
+            tests["wilcoxon"] = {"statistic": float("nan"), "p_value": float("nan")}
+        test_results[metric] = tests
+
+    # Holm 補正 (Welch p を対象)
+    holm_alpha = 0.05
+    finite_welch = [p for p in welch_p_values if p == p]
+    if finite_welch:
+        holm_rejected_finite = holm_correction(finite_welch, alpha=holm_alpha)
+        holm_rejected: list[bool] = []
+        idx = 0
+        for p in welch_p_values:
+            if p == p:
+                holm_rejected.append(holm_rejected_finite[idx])
+                idx += 1
+            else:
+                holm_rejected.append(False)
+    else:
+        holm_rejected = [False] * len(metric_keys)
+
+    json_str = render_compare_json(
+        config_paths=list(configs),
+        n_seeds=n_seeds,
+        metric_keys=metric_keys,
+        results_per_config=results_per_config,
+        test_results=test_results,
+        holm_alpha=holm_alpha,
+        holm_rejected=holm_rejected,
+    )
+    md_str = render_compare_md(
+        config_paths=list(configs),
+        n_seeds=n_seeds,
+        metric_keys=metric_keys,
+        results_per_config=results_per_config,
+        test_results=test_results,
+        holm_rejected=holm_rejected,
+    )
+    json_path = output_dir / "compare.json"
+    md_path = output_dir / "compare.md"
+    json_path.write_text(json_str, encoding="utf-8")
+    md_path.write_text(md_str, encoding="utf-8")
+
+    console.print("[green]compare 出力完了:[/green]")
+    console.print(f"  {json_path}")
+    console.print(f"  {md_path}")
 
 
 @app.command("validate-config")
