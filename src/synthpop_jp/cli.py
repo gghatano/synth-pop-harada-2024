@@ -589,16 +589,101 @@ def generate(
 
 
 @app.command()
-def evaluate(run_dir: str) -> None:
-    """Evaluate the synthetic population in ``run_dir`` (Phase 3.5 onward).
+def evaluate(
+    config: Annotated[
+        Path | None,
+        typer.Option("--config", help="設定ファイルのパス。省略時は configs/base.yaml を使う。"),
+    ] = None,
+    log_level: Annotated[
+        LogLevel,
+        typer.Option("--log-level", help="ログレベル。"),
+    ] = LogLevel.INFO,
+) -> None:
+    """合成人口の品質を評価し、metrics.json に結果を追記する.
 
-    Parameters
-    ----------
-    run_dir : str
-        Directory produced by a previous ``generate`` invocation.
+    ``generate`` 出力ディレクトリ（``settings.output_dir``）の
+    ``synthetic_persons.csv`` から人口を再構築し、入力統計に対する L1 誤差を
+    統計別 + 合計で計算する。結果は同じ ``output_dir/metrics.json`` に
+    ``aggregate.l1.*`` キーとして追記される。
+
+    Phase 3.5 (Issue #59) で初版実装。CAP / rare cell / DCR 等は別 Issue で追加。
     """
-    del run_dir
-    _not_yet("evaluate", "Phase 3.5")
+    import json
+    import logging
+
+    from pydantic import ValidationError
+
+    from synthpop_jp.config import Settings
+    from synthpop_jp.evaluate.aggregate_metrics import AggregateStatL1Evaluator
+    from synthpop_jp.io.loaders import (
+        load_age_diff_couple,
+        load_age_diff_parent_child,
+        load_demographic_by_age_sex,
+    )
+    from synthpop_jp.io.synthesized import reconstruct_population_arrays_from_persons_csv
+
+    logging.basicConfig(level=getattr(logging, log_level.value))
+
+    if config is None:
+        config = _find_default_config()
+
+    console.print(f"[bold]設定ファイル:[/bold] {config}")
+
+    try:
+        settings = Settings.from_yaml(config)
+    except FileNotFoundError:
+        err_console.print(f"[red]エラー:[/red] 設定ファイルが見つかりません: {config}")
+        raise typer.Exit(code=1) from None
+    except ValidationError as e:
+        err_console.print(f"[red]設定の検証に失敗:[/red] {e}")
+        raise typer.Exit(code=1) from None
+
+    persons_csv = settings.output_dir / "synthetic_persons.csv"
+    if not persons_csv.exists():
+        err_console.print(
+            f"[red]エラー:[/red] synthetic_persons.csv が見つかりません: {persons_csv}"
+        )
+        err_console.print("先に `synthpop-jp generate` を実行してください。")
+        raise typer.Exit(code=1)
+
+    console.print(f"[bold]評価対象:[/bold] {persons_csv}")
+    arrays = reconstruct_population_arrays_from_persons_csv(persons_csv)
+    console.print(
+        f"[green]人口再構築完了:[/green] {len(set(int(h) for h in arrays.household_id))} 世帯 / "
+        f"{arrays.n_persons} 人"
+    )
+
+    age_diff_parent_child = load_age_diff_parent_child(
+        settings.input_dir / "age_diff_parent_child.csv"
+    )
+    age_diff_couple = load_age_diff_couple(settings.input_dir / "age_diff_couple.csv")
+    demographic_by_age_sex = load_demographic_by_age_sex(
+        settings.input_dir / "demographic_by_age_sex.csv"
+    )
+
+    evaluator = AggregateStatL1Evaluator(
+        age_diff_parent_child=age_diff_parent_child,
+        age_diff_couple=age_diff_couple,
+        demographic_by_age_sex=demographic_by_age_sex,
+    )
+    metrics = evaluator.evaluate(arrays)
+
+    # metrics.json に追記（既存キーは保持）
+    metrics_path = settings.output_dir / "metrics.json"
+    if metrics_path.exists():
+        existing: dict[str, object] = json.loads(metrics_path.read_text(encoding="utf-8"))
+    else:
+        existing = {}
+    existing.update(metrics)
+    metrics_path.write_text(
+        json.dumps(existing, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+    console.print("[green]評価完了:[/green]")
+    for k, v in metrics.items():
+        console.print(f"  {k}: {v:.1f}")
+    console.print(f"[bold]metrics.json 更新:[/bold] {metrics_path}")
 
 
 @app.command()
