@@ -103,3 +103,55 @@ class TestEvaluateIntegration:
         eval_result = runner.invoke(app, ["evaluate", "--config", str(config_path)])
         assert eval_result.exit_code == 1
         assert "synthetic_persons.csv" in eval_result.output
+
+    def test_evaluate_skips_cap_without_real_persons_csv(self, tmp_path: Path) -> None:
+        """``--real-persons-csv`` 未指定時は ``cap.*`` が含まれず、警告が出る（Issue #65）."""
+        config_path = _make_config_yaml(tmp_path)
+        runner.invoke(app, ["generate", "--config", str(config_path)])
+        eval_result = runner.invoke(app, ["evaluate", "--config", str(config_path)])
+        assert eval_result.exit_code == 0
+        metrics = json.loads((tmp_path / "out" / "metrics.json").read_text(encoding="utf-8"))
+        assert not any(k.startswith("cap.") for k in metrics)
+        assert "CAP" in eval_result.output or "cap" in eval_result.output.lower()
+
+    def test_evaluate_appends_cap_keys_with_real_persons_csv(self, tmp_path: Path) -> None:
+        """``--real-persons-csv`` を指定すると ``cap.*`` キーが追記される（Issue #65）."""
+        config_path = _make_config_yaml(tmp_path)
+        gen_result = runner.invoke(app, ["generate", "--config", str(config_path)])
+        assert gen_result.exit_code == 0, gen_result.output
+        # synthetic を holdout 代わりに使う（self-eval だが CLI 動作確認には十分）
+        synthetic_csv = tmp_path / "out" / "synthetic_persons.csv"
+        eval_result = runner.invoke(
+            app,
+            [
+                "evaluate",
+                "--config",
+                str(config_path),
+                "--real-persons-csv",
+                str(synthetic_csv),
+            ],
+        )
+        assert eval_result.exit_code == 0, eval_result.output
+        metrics = json.loads((tmp_path / "out" / "metrics.json").read_text(encoding="utf-8"))
+        assert "cap.generalized" in metrics
+        assert "cap.targeted" in metrics
+        assert "cap.coverage" in metrics
+        # holdout = synthetic なので perfect coverage
+        assert abs(metrics["cap.coverage"] - 1.0) < 1e-9
+
+    def test_evaluate_fails_with_missing_real_persons_csv(self, tmp_path: Path) -> None:
+        """``--real-persons-csv`` のパスが無ければ exit code 1（Issue #65）."""
+        config_path = _make_config_yaml(tmp_path)
+        runner.invoke(app, ["generate", "--config", str(config_path)])
+        eval_result = runner.invoke(
+            app,
+            [
+                "evaluate",
+                "--config",
+                str(config_path),
+                "--real-persons-csv",
+                str(tmp_path / "does_not_exist.csv"),
+            ],
+        )
+        assert eval_result.exit_code == 1
+        assert "real-persons-csv" in eval_result.output
