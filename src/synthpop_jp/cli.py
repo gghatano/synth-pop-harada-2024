@@ -449,6 +449,7 @@ def generate(
         demographic_by_age_sex=demographic_by_age_sex,
         demo_ft_role=demographic_by_family_type_role,
         use_family_type_pyramid=settings.objective.use_family_type_pyramid,
+        exclude_male_female_pyramid=settings.objective.exclude_male_female_pyramid,
     )
     initial_score = objective.total_score
     console.print(f"[green]初期スコア:[/green] {initial_score:.1f}")
@@ -731,6 +732,7 @@ def evaluate(
         demographic_by_age_sex=demographic_by_age_sex,
         demo_ft_role=demo_ft_role,
         use_family_type_pyramid=settings.objective.use_family_type_pyramid,
+        exclude_male_female_pyramid=settings.objective.exclude_male_female_pyramid,
     )
     rare_cell_evaluator = RareCellEvaluator()
     metrics: dict[str, float] = {

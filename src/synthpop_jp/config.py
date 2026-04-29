@@ -164,19 +164,45 @@ class AnnealingConfig(BaseModel):
 
 
 class ObjectiveConfig(BaseModel):
-    """目的関数のオプション設定 (Issue #71).
+    """目的関数のオプション設定 (Issue #71 / #76).
+
+    モード組合せ
+    ------------
+    - ``(use_family_type_pyramid=False, exclude_male_female_pyramid=False)``: minimal
+      Murata 式(1) 準拠の 5 統計（A, B, C, D, E）。デフォルト。
+    - ``(True, False)``: extended（研究拡張モード）
+      A, B, C, D, E + family_type × sex pyramid（5 + 2N 統計）。Issue #71 で追加。
+    - ``(True, True)``: strict_extended（Murata 式(3) 準拠）
+      A, B, C + family_type × sex pyramid（3 + 2N 統計）。論文 §3 / 式(3) で
+      D, E を除外する規定に従う（Issue #76）。
+    - ``(False, True)``: 意味不明（A, B, C のみで 3 統計）→ ValidationError。
 
     Attributes
     ----------
     use_family_type_pyramid : bool
-        True で family_type × sex demographic pyramid を minimal 5 統計に追加し、
-        合計 5 + 2N 統計の目的関数で SA を回す。`docs/spec/spec.md` §11.3。
-        デフォルト False（既存挙動維持）。
+        True で family_type × sex demographic pyramid を追加（Issue #71）。
+    exclude_male_female_pyramid : bool
+        True で D (male pyramid) と E (female pyramid) を目的関数から除外
+        （Murata 式(3) 準拠、Issue #76）。``use_family_type_pyramid=True`` と
+        併用する必要がある。
     """
 
     model_config = ConfigDict(extra="forbid")
 
     use_family_type_pyramid: bool = False
+    exclude_male_female_pyramid: bool = False
+
+    @model_validator(mode="after")
+    def validate_objective_mode(self) -> ObjectiveConfig:
+        """``exclude_male_female_pyramid`` は ``use_family_type_pyramid`` と併用が必須."""
+        if self.exclude_male_female_pyramid and not self.use_family_type_pyramid:
+            msg = (
+                "exclude_male_female_pyramid=True を指定するときは "
+                "use_family_type_pyramid=True も必須です（Murata 式(3) 準拠は family_type "
+                "別 pyramid を伴う）"
+            )
+            raise ValueError(msg)
+        return self
 
 
 class Settings(BaseModel):

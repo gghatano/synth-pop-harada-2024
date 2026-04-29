@@ -623,6 +623,11 @@ class ObjectiveState:
         拡張オフ時は ``None``（Issue #71）。
     n_family_types : int
         family_type pyramid の対象 family_type 数（拡張オフ時は 0）。
+    excluded_pyramid_indices : tuple[int, ...]
+        Murata 式(3) 準拠で目的関数から除外する pyramid インデックス
+        （Issue #76）。``exclude_male_female_pyramid=True`` のとき ``(3, 4)``
+        を持ち、stats[3] (D: male pyramid) / stats[4] (E: female pyramid) の
+        差分更新と total_score 計算をスキップする。
     """
 
     arrays: PopulationArrays
@@ -630,6 +635,7 @@ class ObjectiveState:
     total_score: float
     family_type_pyramid_offset: int | None = None
     n_family_types: int = 0
+    excluded_pyramid_indices: tuple[int, ...] = ()
 
     @classmethod
     def from_arrays(
@@ -641,6 +647,7 @@ class ObjectiveState:
         *,
         demo_ft_role: list[DemographicByFamilyTypeRoleRow] | None = None,
         use_family_type_pyramid: bool = False,
+        exclude_male_female_pyramid: bool = False,
     ) -> ObjectiveState:
         """PopulationArrays と統計テーブルから ObjectiveState を構築する.
 
@@ -659,11 +666,16 @@ class ObjectiveState:
             ``use_family_type_pyramid=True`` のとき必須。
         use_family_type_pyramid : bool
             True で family_type × sex pyramid を追加する（Issue #71）。
+        exclude_male_female_pyramid : bool
+            True で stats[3] (D: male pyramid) と stats[4] (E: female pyramid)
+            を差分更新と total_score 計算から除外（Murata 式(3) 準拠、Issue #76）。
+            ``use_family_type_pyramid=True`` と併用が前提。
 
         Returns
         -------
         ObjectiveState
-            初期化済みの ObjectiveState。total_score は全統計の L1 合計。
+            初期化済みの ObjectiveState。total_score は全統計の L1 合計
+            （除外指定がある場合はそれを差し引いた値）。
         """
         stats = build_objective_stats(
             arrays=arrays,
@@ -673,7 +685,8 @@ class ObjectiveState:
             demo_ft_role=demo_ft_role,
             use_family_type_pyramid=use_family_type_pyramid,
         )
-        total_score = sum(s.l1_score() for s in stats)
+        excluded: tuple[int, ...] = (3, 4) if exclude_male_female_pyramid else ()
+        total_score = sum(s.l1_score() for i, s in enumerate(stats) if i not in excluded)
         if use_family_type_pyramid:
             offset: int | None = 5
             n_ft = len(arrays.family_reg)
@@ -686,6 +699,7 @@ class ObjectiveState:
             total_score=total_score,
             family_type_pyramid_offset=offset,
             n_family_types=n_ft,
+            excluded_pyramid_indices=excluded,
         )
 
     # -----------------------------------------------------------------------
@@ -720,8 +734,10 @@ class ObjectiveState:
         sex_id = int(self.arrays.sex[person_idx])
         # sex_id=0 → stats[3], sex_id=1 → stats[4]
         pyramid_idx = 3 + sex_id
-        pyramid_stat = self.stats[pyramid_idx]
-        delta += _delta_pyramid(pyramid_stat, old_age, new_age)
+        # Murata 式(3) 準拠モード (Issue #76) では stats[3]/stats[4] をスキップ
+        if pyramid_idx not in self.excluded_pyramid_indices:
+            pyramid_stat = self.stats[pyramid_idx]
+            delta += _delta_pyramid(pyramid_stat, old_age, new_age)
 
         # --- family_type × sex pyramid (Issue #71、拡張オン時のみ) ---
         if self.family_type_pyramid_offset is not None:
@@ -922,8 +938,10 @@ class ObjectiveState:
         """
         sex_id = int(self.arrays.sex[person_idx])
         pyramid_idx = 3 + sex_id
-        pyramid_stat = self.stats[pyramid_idx]
-        _apply_pyramid_update(pyramid_stat, old_age, new_age)
+        # Murata 式(3) 準拠モード (Issue #76) では stats[3]/stats[4] をスキップ
+        if pyramid_idx not in self.excluded_pyramid_indices:
+            pyramid_stat = self.stats[pyramid_idx]
+            _apply_pyramid_update(pyramid_stat, old_age, new_age)
 
         # family_type × sex pyramid (Issue #71)
         if self.family_type_pyramid_offset is not None:
