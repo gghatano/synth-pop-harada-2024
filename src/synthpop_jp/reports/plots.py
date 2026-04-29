@@ -122,19 +122,19 @@ def population_pyramid(persons: pd.DataFrame) -> go.Figure:
     age_labels = [f"{a}〜{a + 9}歳" for a in age_bins[:-1]]
     age_labels.append("80歳以上")
 
-    persons_copy = persons.copy()
-    persons_copy["age_group"] = pd.cut(
-        persons_copy["age"],
+    # Issue #53: persons.copy() で全行を二重に持つのを避けるため、
+    # age_group は Series 単体で計算し、value_counts で集約する。
+    age_group = pd.cut(
+        persons["age"],
         bins=[*age_bins, 200],
         labels=age_labels,
         right=False,
     )
+    male_mask = persons["sex"] == "M"
+    female_mask = persons["sex"] == "F"
 
-    male = persons_copy[persons_copy["sex"] == "M"]
-    female = persons_copy[persons_copy["sex"] == "F"]
-
-    male_counts = male.groupby("age_group", observed=True).size()
-    female_counts = female.groupby("age_group", observed=True).size()
+    male_counts = age_group[male_mask].value_counts()
+    female_counts = age_group[female_mask].value_counts()
 
     # 全年齢層を揃える
     all_groups = pd.CategoricalIndex(age_labels)

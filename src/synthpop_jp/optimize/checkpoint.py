@@ -59,6 +59,16 @@ Parquet 化を検討する（Issue #32 のコメントに記録済）。
         Path("artifacts/checkpoint/latest.pkl.gz")
     )
     rng.bit_generator.state = rng_state
+
+メモリ contract（Issue #53 監査）
+---------------------------------
+- ``save_checkpoint()`` は payload 1 個（``PopulationArrays`` 2 個 + ``ObjectiveState``）を
+  pickle/gzip する間だけメモリを使う。チェックポイントを rolling で複数保持しない。
+- ``load_checkpoint()`` も 1 ファイル単発読み。複数 checkpoint を chain で
+  ロードする経路はない（resume 時は最新 1 個だけ復元）。
+- 100k 世帯規模では一時 peak ~30-50MB。SA 反復の進行とは独立した一過性の peak。
+- Issue #51 の実測で resume 経路の RSS は計測していないが、save/load 1 ファイル単発の
+  実装上、累積リスクはない。
 """
 
 from __future__ import annotations
