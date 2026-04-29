@@ -81,6 +81,21 @@ class TestEvaluateIntegration:
         # 同じ最終人口に対する L1 なので一致する
         assert abs(metrics["aggregate.l1.total"] - metrics["best_score"]) < 1e-3
 
+    def test_evaluate_appends_rare_cell_keys(self, tmp_path: Path) -> None:
+        """evaluate 後の metrics.json に rare_cell.* キーが含まれる（Issue #61）."""
+        config_path = _make_config_yaml(tmp_path)
+        gen_result = runner.invoke(app, ["generate", "--config", str(config_path)])
+        assert gen_result.exit_code == 0, gen_result.output
+        eval_result = runner.invoke(app, ["evaluate", "--config", str(config_path)])
+        assert eval_result.exit_code == 0, eval_result.output
+
+        metrics = json.loads((tmp_path / "out" / "metrics.json").read_text(encoding="utf-8"))
+        assert "rare_cell.total_cells" in metrics
+        assert "rare_cell.fraction_below_5" in metrics
+        assert "rare_cell.fraction_unique" in metrics
+        # per_family_type 分解（少なくとも 1 つの family_type について存在）
+        assert any(k.startswith("rare_cell.per_family_type.") for k in metrics)
+
     def test_evaluate_fails_without_synthetic_csv(self, tmp_path: Path) -> None:
         """generate を先に実行していない場合は exit code 1."""
         config_path = _make_config_yaml(tmp_path)
