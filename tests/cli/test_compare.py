@@ -113,6 +113,65 @@ class TestCompareIntegration:
         assert result.exit_code == 1
         assert "2 個以上" in result.output
 
+    def test_compare_with_bootstrap_ci(self, tmp_path: Path) -> None:
+        """--n-bootstrap > 0 で compare.json に ci_low/ci_high が含まれる (Issue #81)."""
+        cfg_a = _make_config_yaml(tmp_path, "config_a", seed=42)
+        cfg_b = _make_config_yaml(tmp_path, "config_b", seed=42, alpha=0.95)
+        out_dir = tmp_path / "compare_out"
+        result = runner.invoke(
+            app,
+            [
+                "compare",
+                "-c",
+                str(cfg_a),
+                "-c",
+                str(cfg_b),
+                "--n-seeds",
+                "3",
+                "--n-bootstrap",
+                "100",
+                "--output-dir",
+                str(out_dir),
+                "--metrics",
+                "aggregate.l1.total",
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        payload = json.loads((out_dir / "compare.json").read_text(encoding="utf-8"))
+        per_config = payload["metrics"]["aggregate.l1.total"]["per_config"]
+        for cfg_entry in per_config.values():
+            assert "ci_low" in cfg_entry
+            assert "ci_high" in cfg_entry
+            assert cfg_entry["ci_low"] <= cfg_entry["ci_high"]
+
+    def test_compare_with_n_bootstrap_zero_omits_ci(self, tmp_path: Path) -> None:
+        """--n-bootstrap 0 で ci_low/ci_high が含まれない (Issue #81)."""
+        cfg_a = _make_config_yaml(tmp_path, "config_a", seed=42)
+        cfg_b = _make_config_yaml(tmp_path, "config_b", seed=42, alpha=0.95)
+        out_dir = tmp_path / "compare_out"
+        result = runner.invoke(
+            app,
+            [
+                "compare",
+                "-c",
+                str(cfg_a),
+                "-c",
+                str(cfg_b),
+                "--n-seeds",
+                "2",
+                "--n-bootstrap",
+                "0",
+                "--output-dir",
+                str(out_dir),
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        payload = json.loads((out_dir / "compare.json").read_text(encoding="utf-8"))
+        per_config = payload["metrics"]["aggregate.l1.total"]["per_config"]
+        for cfg_entry in per_config.values():
+            assert "ci_low" not in cfg_entry
+            assert "ci_high" not in cfg_entry
+
     def test_compare_with_invalid_n_seeds(self, tmp_path: Path) -> None:
         """n_seeds が範囲外で exit 1."""
         cfg_a = _make_config_yaml(tmp_path, "config_a", seed=42)

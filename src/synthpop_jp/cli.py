@@ -832,6 +832,20 @@ def compare(
             help="比較する metric キーのカンマ区切り。デフォルト: aggregate.l1.total。",
         ),
     ] = "aggregate.l1.total",
+    n_bootstrap: Annotated[
+        int,
+        typer.Option(
+            "--n-bootstrap",
+            help="bootstrap CI のリサンプル数。0 で無効化。デフォルト 2000 (Issue #81)。",
+        ),
+    ] = 2000,
+    ci_confidence: Annotated[
+        float,
+        typer.Option(
+            "--ci-confidence",
+            help="bootstrap CI の信頼度。デフォルト 0.95。",
+        ),
+    ] = 0.95,
     log_level: Annotated[
         LogLevel,
         typer.Option("--log-level", help="ログレベル。"),
@@ -840,15 +854,19 @@ def compare(
     """複数 config × n_seeds の SA を実行し、統計検定付きで比較する (Issue #80).
 
     各 config を ``n_seeds`` 個の独立 seed で実行し、指定された metric の
-    Welch's t / Wilcoxon signed-rank + Holm 補正を計算する。
+    Welch's t / Wilcoxon signed-rank + Holm 補正と percentile bootstrap CI
+    （Issue #81）を計算する。
     結果は ``output_dir/compare.json`` (機械可読) と ``compare.md`` (人間可読)
     に書き出す。
     """
     import logging
 
+    import numpy as np
+
     from synthpop_jp.compare.report import render_compare_json, render_compare_md
     from synthpop_jp.compare.runner import run_seed_sweep
     from synthpop_jp.compare.stats import (
+        bootstrap_ci,
         holm_correction,
         welch_t_test,
         wilcoxon_signed_rank,
@@ -937,6 +955,25 @@ def compare(
     else:
         holm_rejected = [False] * len(metric_keys)
 
+    # bootstrap CI (Issue #81). n_bootstrap=0 でスキップ
+    ci_per_metric: dict[str, dict[str, tuple[float, float]]] | None = None
+    if n_bootstrap > 0:
+        ci_per_metric = {}
+        ci_rng = np.random.default_rng(seed=42)
+        for metric in metric_keys:
+            ci_per_metric[metric] = {}
+            for i, cfg in enumerate(configs):
+                values = [r.get(metric, float("nan")) for r in results_per_config[i]]
+                finite = [v for v in values if v == v]
+                if len(finite) >= 2:
+                    ci_low, ci_high = bootstrap_ci(
+                        finite,
+                        n_bootstrap=n_bootstrap,
+                        confidence=ci_confidence,
+                        rng=ci_rng,
+                    )
+                    ci_per_metric[metric][str(cfg)] = (ci_low, ci_high)
+
     json_str = render_compare_json(
         config_paths=list(configs),
         n_seeds=n_seeds,
@@ -945,6 +982,7 @@ def compare(
         test_results=test_results,
         holm_alpha=holm_alpha,
         holm_rejected=holm_rejected,
+        ci_per_metric=ci_per_metric,
     )
     md_str = render_compare_md(
         config_paths=list(configs),
@@ -953,6 +991,7 @@ def compare(
         results_per_config=results_per_config,
         test_results=test_results,
         holm_rejected=holm_rejected,
+        ci_per_metric=ci_per_metric,
     )
     json_path = output_dir / "compare.json"
     md_path = output_dir / "compare.md"
