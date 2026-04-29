@@ -1,7 +1,7 @@
-"""統計検定 (Issue #80).
+"""統計検定 (Issue #80) + bootstrap CI (Issue #81).
 
-Welch's t-test / Wilcoxon signed-rank / Holm-Bonferroni 補正を提供する。
-``scipy.stats`` を内部で呼ぶ薄いラッパー + Holm の自前実装。
+Welch's t-test / Wilcoxon signed-rank / Holm-Bonferroni 補正 + percentile
+法 bootstrap CI を提供する。``scipy.stats`` を内部で呼ぶ薄いラッパー + 自前実装。
 
 実装ノート
 ----------
@@ -9,12 +9,17 @@ Welch's t-test / Wilcoxon signed-rank / Holm-Bonferroni 補正を提供する。
 - Wilcoxon signed-rank は ``scipy.stats.wilcoxon`` を使う（対応群のみ）
 - Holm 補正は手実装（scipy には ``multipletests`` 経由で同等品があるが
   依存追加を避けるため自前で書く）
+- bootstrap CI は ``numpy.random.Generator`` で復元抽出 + percentile 法
 
-`docs/spec/spec.md` §15.5 が定める検定方法に対応。
+`docs/spec/spec.md` §15.5 が定める検定方法 + bootstrap CI に対応。
 """
 
 from __future__ import annotations
 
+import statistics
+from collections.abc import Callable
+
+import numpy as np
 from scipy import stats as _scipy_stats
 
 
@@ -99,3 +104,69 @@ def holm_correction(p_values: list[float], alpha: float = 0.05) -> list[bool]:
             rejected_by_orig[orig_idx] = False
             holding = True
     return [rejected_by_orig[i] for i in range(m)]
+
+
+def bootstrap_ci(
+    values: list[float],
+    n_bootstrap: int = 2000,
+    confidence: float = 0.95,
+    rng: np.random.Generator | None = None,
+    statistic: Callable[[list[float]], float] = statistics.mean,
+) -> tuple[float, float]:
+    """Percentile 法 bootstrap CI を返す (spec §15.5、Issue #81).
+
+    手順:
+    1. ``values`` から復元抽出で ``n_bootstrap`` 個の resample を作る
+    2. 各 resample に ``statistic`` を適用して bootstrap 分布を得る
+    3. 分布の ``(1-c)/2`` と ``1-(1-c)/2`` quantile を返す
+
+    Parameters
+    ----------
+    values : list[float]
+        標本（空でないこと）。
+    n_bootstrap : int
+        リサンプル数。spec §15.5 のデフォルトは 2000。
+    confidence : float
+        信頼度（0 < c < 1）。デフォルト 0.95（95% CI）。
+    rng : np.random.Generator | None
+        乱数発生器。``None`` のとき ``np.random.default_rng()`` を使う
+        （非決定論）。実験では固定 seed の Generator を渡すこと。
+    statistic : Callable[[list[float]], float]
+        ブートストラップ対象の統計量。デフォルトは平均。
+
+    Returns
+    -------
+    tuple[float, float]
+        ``(ci_low, ci_high)``。
+
+    Raises
+    ------
+    ValueError
+        ``values`` が空、``n_bootstrap`` <= 0、``confidence`` ∉ (0, 1) のとき。
+    """
+    if not values:
+        msg = "bootstrap_ci: values が空です"
+        raise ValueError(msg)
+    if n_bootstrap <= 0:
+        msg = f"n_bootstrap は 1 以上 (got {n_bootstrap})"
+        raise ValueError(msg)
+    if not (0.0 < confidence < 1.0):
+        msg = f"confidence は (0, 1) の範囲 (got {confidence})"
+        raise ValueError(msg)
+
+    if rng is None:
+        rng = np.random.default_rng()
+
+    arr = np.asarray(values, dtype=np.float64)
+    n = arr.size
+    boot_stats = np.empty(n_bootstrap, dtype=np.float64)
+    for i in range(n_bootstrap):
+        idx = rng.integers(0, n, size=n)
+        sample = arr[idx]
+        boot_stats[i] = statistic(sample.tolist())
+    alpha = 1.0 - confidence
+    low_q = alpha / 2.0
+    high_q = 1.0 - alpha / 2.0
+    ci_low = float(np.quantile(boot_stats, low_q))
+    ci_high = float(np.quantile(boot_stats, high_q))
+    return ci_low, ci_high

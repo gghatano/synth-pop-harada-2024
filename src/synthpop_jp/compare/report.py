@@ -16,6 +16,7 @@ def render_compare_json(
     test_results: dict[str, dict[str, dict[str, float]]],
     holm_alpha: float = 0.05,
     holm_rejected: list[bool] | None = None,
+    ci_per_metric: dict[str, dict[str, tuple[float, float]]] | None = None,
 ) -> str:
     """compare.json の文字列を生成.
 
@@ -36,6 +37,8 @@ def render_compare_json(
         多重比較補正の α。
     holm_rejected : list[bool] | None
         各 metric の welch p に対する Holm 補正後の棄却フラグ。
+    ci_per_metric : dict[str, dict[str, tuple[float, float]]] | None
+        ``ci_per_metric[metric][config_path] = (ci_low, ci_high)``（Issue #81）。
     """
     payload: dict[str, Any] = {
         "configs": [str(p) for p in config_paths],
@@ -46,11 +49,17 @@ def render_compare_json(
         per_config: dict[str, dict[str, Any]] = {}
         for i, cfg in enumerate(config_paths):
             values = [r.get(metric, float("nan")) for r in results_per_config[i]]
-            per_config[str(cfg)] = {
+            entry: dict[str, Any] = {
                 "mean": _safe_mean(values),
                 "std": _safe_std(values),
                 "values": values,
             }
+            if ci_per_metric is not None:
+                ci = ci_per_metric.get(metric, {}).get(str(cfg))
+                if ci is not None:
+                    entry["ci_low"] = ci[0]
+                    entry["ci_high"] = ci[1]
+            per_config[str(cfg)] = entry
         payload["metrics"][metric] = {
             "per_config": per_config,
             "tests": test_results.get(metric, {}),
@@ -70,8 +79,13 @@ def render_compare_md(
     results_per_config: list[list[dict[str, float]]],
     test_results: dict[str, dict[str, dict[str, float]]],
     holm_rejected: list[bool] | None = None,
+    ci_per_metric: dict[str, dict[str, tuple[float, float]]] | None = None,
 ) -> str:
-    """compare.md の文字列を生成 (Harada 2024 Table 13 風)."""
+    """compare.md の文字列を生成 (Harada 2024 Table 13 風).
+
+    ``ci_per_metric`` が渡されたとき、各セルに ``mean [ci_low, ci_high]`` の
+    形式で 95% CI も併記する（Issue #81）。
+    """
     lines: list[str] = ["# 比較レポート (Issue #80)", ""]
     lines.append(f"- **configs**: {len(config_paths)}")
     for i, p in enumerate(config_paths):
@@ -89,11 +103,16 @@ def render_compare_md(
     lines.append("|" + "|".join(["---"] * len(header)) + "|")
     for j, metric in enumerate(metric_keys):
         row = [metric]
-        for i in range(len(config_paths)):
+        for i, cfg in enumerate(config_paths):
             values = [r.get(metric, float("nan")) for r in results_per_config[i]]
             mean = _safe_mean(values)
             std = _safe_std(values)
-            row.append(f"{mean:.3f} ± {std:.3f}")
+            cell = f"{mean:.3f} ± {std:.3f}"
+            if ci_per_metric is not None:
+                ci = ci_per_metric.get(metric, {}).get(str(cfg))
+                if ci is not None:
+                    cell += f" [{ci[0]:.3f}, {ci[1]:.3f}]"
+            row.append(cell)
         tests = test_results.get(metric, {})
         welch_p = tests.get("welch_t", {}).get("p_value", float("nan"))
         wilcoxon_p = tests.get("wilcoxon", {}).get("p_value", float("nan"))
