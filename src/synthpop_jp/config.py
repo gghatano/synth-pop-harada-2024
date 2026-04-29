@@ -163,6 +163,22 @@ class AnnealingConfig(BaseModel):
         return self
 
 
+class ObjectiveConfig(BaseModel):
+    """目的関数のオプション設定 (Issue #71).
+
+    Attributes
+    ----------
+    use_family_type_pyramid : bool
+        True で family_type × sex demographic pyramid を minimal 5 統計に追加し、
+        合計 5 + 2N 統計の目的関数で SA を回す。`docs/spec/spec.md` §11.3。
+        デフォルト False（既存挙動維持）。
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    use_family_type_pyramid: bool = False
+
+
 class Settings(BaseModel):
     """CLI 全体の実行設定をまとめる pydantic モデル.
 
@@ -177,6 +193,10 @@ class Settings(BaseModel):
     family_type_mapping : Path | None
         ``family_type_mapping.yaml`` のパス。省略時は ``configs/family_type_mapping.yaml``
         を自動検索する。
+    annealing : AnnealingConfig
+        SA 実行パラメータ。
+    objective : ObjectiveConfig
+        目的関数のオプション（Issue #71）。
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -186,6 +206,7 @@ class Settings(BaseModel):
     output_dir: Path
     family_type_mapping: Path | None = None
     annealing: AnnealingConfig = AnnealingConfig()
+    objective: ObjectiveConfig = ObjectiveConfig()
 
     @classmethod
     def from_yaml(cls, path: Path) -> Settings:

@@ -1,8 +1,8 @@
-"""Aggregate 21-statistic L1 error reporter (Phase 3.5, Issue #59).
+"""Aggregate L1 error reporter (Phase 3.5, Issue #59 / #71).
 
-Phase 2 実装済みの 5 統計（``ObjectiveState.stats`` と同型）に対し、observed と
-target の L1 誤差を統計別 + 合計で返す Evaluator を提供する。21 統計拡張は
-Phase 3a の別 Issue で対応する。
+minimal 5 統計（Issue #59）と、optional の family_type × sex pyramid 統計
+（Issue #71、5 + 2N 統計）に対し、observed と target の L1 誤差を統計別 + 合計で
+返す Evaluator を提供する。
 
 提供するもの
 ------------
@@ -15,6 +15,8 @@ Phase 3a の別 Issue で対応する。
 - ``aggregate.l1.couple_age_diff``
 - ``aggregate.l1.pyramid_male``
 - ``aggregate.l1.pyramid_female``
+- ``aggregate.l1.pyramid_per_family_type.<family_type>.<sex>``
+  （``use_family_type_pyramid=True`` のときのみ）
 - ``aggregate.l1.total``
 """
 
@@ -29,11 +31,12 @@ if TYPE_CHECKING:
         AgeDiffCoupleRow,
         AgeDiffParentChildRow,
         DemographicByAgeSexRow,
+        DemographicByFamilyTypeRoleRow,
     )
     from synthpop_jp.optimize.state import PopulationArrays
 
 
-# 5 統計の出力キー名（``build_objective_stats`` のインデックス順）
+# minimal 5 統計の出力キー名（``build_objective_stats`` のインデックス順）
 _STAT_NAMES: tuple[str, ...] = (
     "father_child_age_diff",
     "mother_child_age_diff",
@@ -57,6 +60,11 @@ class AggregateStatL1Evaluator:
         ``age_diff_couple.csv`` から読んだ全行。
     demographic_by_age_sex : list[DemographicByAgeSexRow]
         ``demographic_by_age_sex.csv`` から読んだ全行。
+    demo_ft_role : list[DemographicByFamilyTypeRoleRow] | None
+        ``demographic_by_family_type_role.csv`` の全行。
+        ``use_family_type_pyramid=True`` のとき必須（Issue #71）。
+    use_family_type_pyramid : bool
+        True で family_type × sex pyramid 統計の L1 を追加する（Issue #71）。
 
     Attributes
     ----------
@@ -71,13 +79,18 @@ class AggregateStatL1Evaluator:
         age_diff_parent_child: list[AgeDiffParentChildRow],
         age_diff_couple: list[AgeDiffCoupleRow],
         demographic_by_age_sex: list[DemographicByAgeSexRow],
+        *,
+        demo_ft_role: list[DemographicByFamilyTypeRoleRow] | None = None,
+        use_family_type_pyramid: bool = False,
     ) -> None:
         self._age_diff_parent_child = age_diff_parent_child
         self._age_diff_couple = age_diff_couple
         self._demographic_by_age_sex = demographic_by_age_sex
+        self._demo_ft_role = demo_ft_role
+        self._use_family_type_pyramid = use_family_type_pyramid
 
     def evaluate(self, pop: PopulationArrays) -> dict[str, float]:
-        """合成人口の 5 統計 L1 誤差を計算して dict で返す.
+        """合成人口の統計別 L1 誤差を計算して dict で返す.
 
         Parameters
         ----------
@@ -87,20 +100,35 @@ class AggregateStatL1Evaluator:
         Returns
         -------
         dict[str, float]
-            ``aggregate.l1.<stat_name>`` × 5 + ``aggregate.l1.total`` を含む
-            6 キーの dict。
+            minimal 5 統計の ``aggregate.l1.<stat_name>`` + ``aggregate.l1.total``。
+            ``use_family_type_pyramid=True`` のときは
+            ``aggregate.l1.pyramid_per_family_type.<ft>.<sex>`` も追加。
         """
         stats = build_objective_stats(
             arrays=pop,
             age_diff_parent_child=self._age_diff_parent_child,
             age_diff_couple=self._age_diff_couple,
             demographic_by_age_sex=self._demographic_by_age_sex,
+            demo_ft_role=self._demo_ft_role,
+            use_family_type_pyramid=self._use_family_type_pyramid,
         )
         result: dict[str, float] = {}
         total = 0.0
-        for i, stat in enumerate(stats):
-            l1 = stat.l1_score()
+        for i in range(5):
+            l1 = stats[i].l1_score()
             result[f"{self.name}.l1.{_STAT_NAMES[i]}"] = l1
             total += l1
+
+        if self._use_family_type_pyramid:
+            n_ft = len(pop.family_reg)
+            for ft_id in range(n_ft):
+                ft_name = pop.family_reg.name_of(ft_id)
+                for s_idx, sex in enumerate(("M", "F")):
+                    stat_idx = 5 + ft_id * 2 + s_idx
+                    l1 = stats[stat_idx].l1_score()
+                    key = f"{self.name}.l1.pyramid_per_family_type.{ft_name}.{sex}"
+                    result[key] = l1
+                    total += l1
+
         result[f"{self.name}.l1.total"] = total
         return result

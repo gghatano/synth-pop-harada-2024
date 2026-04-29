@@ -34,6 +34,7 @@ from synthpop_jp.io.schemas import (
     AgeDiffCoupleRow,
     AgeDiffParentChildRow,
     DemographicByAgeSexRow,
+    DemographicByFamilyTypeRoleRow,
 )
 
 if TYPE_CHECKING:
@@ -450,7 +451,82 @@ def _compute_pyramid_observed(
 
 
 # ---------------------------------------------------------------------------
-# build_objective_stats: 5 統計の構築
+# family_type 別 demographic pyramid (Issue #71)
+# ---------------------------------------------------------------------------
+
+
+def _build_family_type_pyramid_stat(
+    rows: list[DemographicByFamilyTypeRoleRow],
+    family_type: str,
+    sex_label: str,
+    arrays: PopulationArrays,
+) -> StatTable:
+    """family_type × sex 別の demographic pyramid 統計を構築する.
+
+    target は ``demographic_by_family_type_role.csv`` を ``(family_type, sex, age)``
+    で集計（role を集約）した値。observed は合成集団の (family_type, sex) 別 age 分布。
+
+    Parameters
+    ----------
+    rows : list[DemographicByFamilyTypeRoleRow]
+        ``demographic_by_family_type_role.csv`` から読んだ全行。
+    family_type : str
+        対象の family_type 名。
+    sex_label : str
+        ``"M"`` または ``"F"``。
+    arrays : PopulationArrays
+        合成集団の人口配列。
+
+    Returns
+    -------
+    StatTable
+        observed と target が初期化された統計テーブル。target に該当 age が無い
+        family_type/sex でも空の StatTable（target 全 0、bin_edges は age 0..100）を返す。
+    """
+    # 該当 family_type × sex の rows を age 別に集約（role を sum）
+    matched = [r for r in rows if r.family_type == family_type and r.sex == sex_label]
+    age_to_count: dict[int, int] = {}
+    for r in matched:
+        age_to_count[r.age] = age_to_count.get(r.age, 0) + r.count
+
+    # bin_edges は age 0..100 の固定 (101 bins)。target に無い age は 0 として扱う。
+    # observed が target 範囲外で捨てられないように 0..100 を網羅する。
+    bin_edges = np.arange(0, 102, dtype=np.float64)
+    target = np.zeros(101, dtype=np.int64)
+    for age, count in age_to_count.items():
+        if 0 <= age <= 100:
+            target[age] = count
+
+    family_type_id = arrays.family_reg.id_of(family_type)
+    sex_id = arrays.sex_reg.id_of(sex_label)
+    n_bins = len(bin_edges) - 1
+    observed = _compute_family_type_pyramid_observed(
+        arrays, family_type_id, sex_id, bin_edges, n_bins
+    )
+    return StatTable(observed=observed, target=target, bin_edges=bin_edges)
+
+
+def _compute_family_type_pyramid_observed(
+    arrays: PopulationArrays,
+    family_type_id: int,
+    sex_id: int,
+    bin_edges: np.ndarray,
+    n_bins: int,
+) -> np.ndarray:
+    """family_type × sex の observed pyramid を計算する."""
+    mask = (arrays.family_type == family_type_id) & (arrays.sex == sex_id)
+    ages = arrays.age[mask].astype(np.int64)
+    observed, _ = np.histogram(ages, bins=bin_edges)
+    return observed.astype(np.int64)
+
+
+def family_type_pyramid_index(offset: int, family_type_id: int, sex_id: int, n_sex: int = 2) -> int:
+    """family_type × sex から ``stats`` リストのインデックスを計算する."""
+    return offset + family_type_id * n_sex + sex_id
+
+
+# ---------------------------------------------------------------------------
+# build_objective_stats: 5 統計 (+ optional family_type pyramid) の構築
 # ---------------------------------------------------------------------------
 
 
@@ -459,8 +535,11 @@ def build_objective_stats(
     age_diff_parent_child: list[AgeDiffParentChildRow],
     age_diff_couple: list[AgeDiffCoupleRow],
     demographic_by_age_sex: list[DemographicByAgeSexRow],
+    *,
+    demo_ft_role: list[DemographicByFamilyTypeRoleRow] | None = None,
+    use_family_type_pyramid: bool = False,
 ) -> list[StatTable]:
-    """5 統計を構築して StatTable のリストを返す.
+    """5 統計（+ optional family_type × sex pyramid）を構築する.
 
     返り値のインデックス:
     - 0: father-child 年齢差
@@ -468,6 +547,8 @@ def build_objective_stats(
     - 2: couple 年齢差（husband - wife）
     - 3: male demographic pyramid
     - 4: female demographic pyramid
+    - 5..5 + 2N - 1: ``use_family_type_pyramid=True`` のとき
+      ``family_type_id * 2 + sex_id`` 順で family_type × sex pyramid
 
     Parameters
     ----------
@@ -479,19 +560,40 @@ def build_objective_stats(
         age_diff_couple.csv から読んだ全行。
     demographic_by_age_sex : list[DemographicByAgeSexRow]
         demographic_by_age_sex.csv から読んだ全行。
+    demo_ft_role : list[DemographicByFamilyTypeRoleRow] | None
+        ``demographic_by_family_type_role.csv`` の全行。
+        ``use_family_type_pyramid=True`` のとき必須。
+    use_family_type_pyramid : bool
+        True で family_type × sex pyramid 統計を末尾に追加する（Issue #71）。
 
     Returns
     -------
     list[StatTable]
-        長さ 5 の StatTable リスト。
+        長さ 5（拡張オフ時）または 5 + 2N（拡張オン時）。
     """
-    return [
+    base = [
         _build_parent_child_stat(age_diff_parent_child, "father", arrays),
         _build_parent_child_stat(age_diff_parent_child, "mother", arrays),
         _build_couple_stat(age_diff_couple, arrays),
         _build_pyramid_stat(demographic_by_age_sex, "M", arrays),
         _build_pyramid_stat(demographic_by_age_sex, "F", arrays),
     ]
+    if not use_family_type_pyramid:
+        return base
+
+    if demo_ft_role is None:
+        msg = "use_family_type_pyramid=True のとき demo_ft_role を渡す必要があります"
+        raise ValueError(msg)
+
+    # family_type は登録 ID 順で列挙する。stats[offset + ft_id*2 + sex_id] で
+    # 正しいインデックスを引けるよう、set ベースの順序非決定性を避ける（Issue #71）。
+    n_ft = len(arrays.family_reg)
+    extended: list[StatTable] = []
+    for ft_id in range(n_ft):
+        ft = arrays.family_reg.name_of(ft_id)
+        for sex in ("M", "F"):
+            extended.append(_build_family_type_pyramid_stat(demo_ft_role, ft, sex, arrays))
+    return base + extended
 
 
 # ---------------------------------------------------------------------------
@@ -504,21 +606,30 @@ class ObjectiveState:
     """差分更新版目的関数の状態コンテナ.
 
     SA の内部ループで 1 人の age が変わるとき、
-    5 統計のヒストグラムを O(1) で差分更新しながら total_score を維持する。
+    5 統計（+ optional family_type × sex pyramid）のヒストグラムを O(1) で
+    差分更新しながら total_score を維持する。
 
     Attributes
     ----------
     arrays : PopulationArrays
         人口配列への参照（コピーしない）。
     stats : list[StatTable]
-        5 統計分の StatTable リスト（インデックスの意味は build_objective_stats 参照）。
+        StatTable リスト。インデックスの意味は ``build_objective_stats`` 参照。
+        family_type pyramid 拡張オンのとき長さは 5 + 2N。
     total_score : float
         現在の目的スコア = Σ_s L1(stats[s])。
+    family_type_pyramid_offset : int | None
+        ``stats`` における family_type × sex pyramid の開始インデックス。
+        拡張オフ時は ``None``（Issue #71）。
+    n_family_types : int
+        family_type pyramid の対象 family_type 数（拡張オフ時は 0）。
     """
 
     arrays: PopulationArrays
     stats: list[StatTable]
     total_score: float
+    family_type_pyramid_offset: int | None = None
+    n_family_types: int = 0
 
     @classmethod
     def from_arrays(
@@ -527,6 +638,9 @@ class ObjectiveState:
         age_diff_parent_child: list[AgeDiffParentChildRow],
         age_diff_couple: list[AgeDiffCoupleRow],
         demographic_by_age_sex: list[DemographicByAgeSexRow],
+        *,
+        demo_ft_role: list[DemographicByFamilyTypeRoleRow] | None = None,
+        use_family_type_pyramid: bool = False,
     ) -> ObjectiveState:
         """PopulationArrays と統計テーブルから ObjectiveState を構築する.
 
@@ -540,23 +654,38 @@ class ObjectiveState:
             age_diff_couple.csv から読んだ全行。
         demographic_by_age_sex : list[DemographicByAgeSexRow]
             demographic_by_age_sex.csv から読んだ全行。
+        demo_ft_role : list[DemographicByFamilyTypeRoleRow] | None
+            ``demographic_by_family_type_role.csv`` の全行。
+            ``use_family_type_pyramid=True`` のとき必須。
+        use_family_type_pyramid : bool
+            True で family_type × sex pyramid を追加する（Issue #71）。
 
         Returns
         -------
         ObjectiveState
-            初期化済みの ObjectiveState。total_score は 5 統計の L1 合計。
+            初期化済みの ObjectiveState。total_score は全統計の L1 合計。
         """
         stats = build_objective_stats(
             arrays=arrays,
             age_diff_parent_child=age_diff_parent_child,
             age_diff_couple=age_diff_couple,
             demographic_by_age_sex=demographic_by_age_sex,
+            demo_ft_role=demo_ft_role,
+            use_family_type_pyramid=use_family_type_pyramid,
         )
         total_score = sum(s.l1_score() for s in stats)
+        if use_family_type_pyramid:
+            offset: int | None = 5
+            n_ft = len(arrays.family_reg)
+        else:
+            offset = None
+            n_ft = 0
         return cls(
             arrays=arrays,
             stats=stats,
             total_score=total_score,
+            family_type_pyramid_offset=offset,
+            n_family_types=n_ft,
         )
 
     # -----------------------------------------------------------------------
@@ -593,6 +722,15 @@ class ObjectiveState:
         pyramid_idx = 3 + sex_id
         pyramid_stat = self.stats[pyramid_idx]
         delta += _delta_pyramid(pyramid_stat, old_age, new_age)
+
+        # --- family_type × sex pyramid (Issue #71、拡張オン時のみ) ---
+        if self.family_type_pyramid_offset is not None:
+            ft_id = int(self.arrays.family_type[person_idx])
+            ft_pyramid_idx = family_type_pyramid_index(
+                self.family_type_pyramid_offset, ft_id, sex_id
+            )
+            ft_pyramid_stat = self.stats[ft_pyramid_idx]
+            delta += _delta_pyramid(ft_pyramid_stat, old_age, new_age)
 
         # --- stats[0]: father-child, stats[1]: mother-child ---
         role_id = int(self.arrays.role[person_idx])
@@ -786,6 +924,14 @@ class ObjectiveState:
         pyramid_idx = 3 + sex_id
         pyramid_stat = self.stats[pyramid_idx]
         _apply_pyramid_update(pyramid_stat, old_age, new_age)
+
+        # family_type × sex pyramid (Issue #71)
+        if self.family_type_pyramid_offset is not None:
+            ft_id = int(self.arrays.family_type[person_idx])
+            ft_pyramid_idx = family_type_pyramid_index(
+                self.family_type_pyramid_offset, ft_id, sex_id
+            )
+            _apply_pyramid_update(self.stats[ft_pyramid_idx], old_age, new_age)
 
         role_id = int(self.arrays.role[person_idx])
         role_name = self.arrays.role_reg.name_of(role_id)

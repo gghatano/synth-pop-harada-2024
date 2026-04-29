@@ -155,3 +155,32 @@ class TestEvaluateIntegration:
         )
         assert eval_result.exit_code == 1
         assert "real-persons-csv" in eval_result.output
+
+    def test_evaluate_appends_pyramid_per_family_type_keys(self, tmp_path: Path) -> None:
+        """use_family_type_pyramid=True の config で evaluate が
+        ``aggregate.l1.pyramid_per_family_type.<ft>.<sex>`` キーを出力する (Issue #71)."""
+        config_data: dict[str, object] = {
+            "seed": 42,
+            "input_dir": str(SAMPLE_CASE_DIR),
+            "output_dir": str(tmp_path / "out"),
+            "annealing": {
+                "T0": 100.0,
+                "alpha": 0.99,
+                "max_iters": 200,
+                "evals_per_agent": 0,
+                "target_threshold": 0.0,
+                "patience": 0,
+            },
+            "objective": {"use_family_type_pyramid": True},
+        }
+        config_path = tmp_path / "config_extended.yaml"
+        config_path.write_text(yaml.dump(config_data))
+        gen_result = runner.invoke(app, ["generate", "--config", str(config_path)])
+        assert gen_result.exit_code == 0, gen_result.output
+        eval_result = runner.invoke(app, ["evaluate", "--config", str(config_path)])
+        assert eval_result.exit_code == 0, eval_result.output
+
+        metrics = json.loads((tmp_path / "out" / "metrics.json").read_text(encoding="utf-8"))
+        assert any(k.startswith("aggregate.l1.pyramid_per_family_type.") for k in metrics), (
+            f"pyramid_per_family_type キーが含まれない: keys={list(metrics)[:20]}"
+        )
