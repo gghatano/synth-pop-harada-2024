@@ -715,6 +715,61 @@ class ObjectiveState:
         # total_score を更新
         self.total_score += delta
 
+    def propose_swap(self, idx_a: int, new_age_a: int, idx_b: int, new_age_b: int) -> float:
+        """Age swap の合算 delta スコアを副作用なしで計算する.
+
+        Issue #57 / §12.2B age-swap 用。実装は ``apply_change(idx_a)`` →
+        ``propose_change(idx_b)`` → ``apply_change(idx_a, old)`` で revert することで
+        side-effect-free を保ちつつ atomic な合算 delta を得る。
+
+        Parameters
+        ----------
+        idx_a, idx_b : int
+            交換対象の 2 人の person index（0-indexed）。同じ index を渡した場合は 0.0 を返す。
+        new_age_a, new_age_b : int
+            交換後の age（age-swap では ``new_age_a == old_age_b``、``new_age_b == old_age_a``）。
+
+        Returns
+        -------
+        float
+            合算スコア差分（``apply_swap`` 後の total_score 変化と一致）。
+        """
+        if idx_a == idx_b:
+            return 0.0
+
+        score_initial = self.total_score
+        old_age_a = int(self.arrays.age[idx_a])
+
+        # A を適用して中間状態を作る
+        self.apply_change(idx_a, new_age_a)
+        delta_a = self.total_score - score_initial
+
+        # B の delta を中間状態（A 適用後）に対して計算
+        delta_b = self._compute_delta_for_change(idx_b, new_age_b)
+
+        # A を revert（apply_change で元の age に戻す）
+        self.apply_change(idx_a, old_age_a)
+
+        return delta_a + delta_b
+
+    def apply_swap(self, idx_a: int, new_age_a: int, idx_b: int, new_age_b: int) -> None:
+        """Age swap を atomic に内部状態へ適用する.
+
+        Issue #57 / §12.2B age-swap 用。``apply_change(idx_a)`` → ``apply_change(idx_b)``
+        の順で適用し、最終的な ``total_score`` と histograms を整合状態に保つ。
+
+        Parameters
+        ----------
+        idx_a, idx_b : int
+            交換対象の 2 人の person index。同じ index を渡した場合は何もしない。
+        new_age_a, new_age_b : int
+            交換後の age。
+        """
+        if idx_a == idx_b:
+            return
+        self.apply_change(idx_a, new_age_a)
+        self.apply_change(idx_b, new_age_b)
+
     def _update_histograms(self, person_idx: int, old_age: int, new_age: int) -> None:
         """Observed ヒストグラムを差分更新する（arrays.age は更新前）.
 

@@ -23,6 +23,7 @@ YAML ファイルから ``Settings.from_yaml(path)`` で読み込み、
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, field_validator
@@ -61,6 +62,10 @@ class AnnealingConfig(BaseModel):
     checkpoint_dir : Path | None
         チェックポイントファイルの保存先ディレクトリ。
         None のときチェックポイントを保存しない。デフォルト None。
+    transition_kind : Literal["age-change", "age-swap"]
+        SA の遷移方式を選択する（Phase 3a Issue #57）。
+        ``"age-change"`` は §12.2A、``"age-swap"`` は §12.2B（同 family_type 同 sex の年齢交換）。
+        デフォルト ``"age-change"``。
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -75,6 +80,7 @@ class AnnealingConfig(BaseModel):
     trace_enabled: bool = True
     checkpoint_every_n_iters: int = 10000
     checkpoint_dir: Path | None = None
+    transition_kind: Literal["age-change", "age-swap"] = "age-change"
 
     @field_validator("T0")
     @classmethod

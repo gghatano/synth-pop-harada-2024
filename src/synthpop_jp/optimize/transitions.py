@@ -1,13 +1,15 @@
-"""Transition operators (age-change, Phase 2).
-
-age-swap / hybrid は Phase 3a で実装する。
+"""Transition operators (age-change Phase 2, age-swap Phase 3a).
 
 このモジュールは SA（シミュレーテッドアニーリング）の候補解生成を担う。
-``AgeChangeTransition.propose()`` を呼ぶと、ハード制約を満たす
-``(person_idx, new_age)`` が返される。
 
-ハード制約一覧
---------------
+提供するもの:
+- ``AgeChangeTransition``: §12.2A. 1 人の age を変更する遷移。
+  ``propose() -> (person_idx, new_age)``
+- ``AgeSwapTransition``: §12.2B. 同 family_type 同 sex の 2 人の age を交換する遷移
+  （Phase 3a, Issue #57）。``propose() -> ((idx_a, new_age_a), (idx_b, new_age_b))``
+
+ハード制約一覧（両遷移で共通）
+------------------------------
 - 年齢は 0 以上 100 以下
 - husband / wife / father / mother は 18 歳以上
 - father / mother / parent（義親）は同世帯の child の最高齢 + 14 歳以上
@@ -419,3 +421,224 @@ class AgeChangeTransition:
             f"（person_idx={person_idx}, role={role_name!r}）"
         )
         raise TransitionError(msg)
+
+
+# ---------------------------------------------------------------------------
+# AgeSwapTransition (§12.2B, Phase 3a Issue #57)
+# ---------------------------------------------------------------------------
+
+
+class AgeSwapTransition:
+    """同一 family_type・同一 sex の 2 人の年齢を交換する遷移（§12.2B）.
+
+    Murata 2017 の age-swap. age-change と異なり family_type 別の人口構成を保つ。
+    ``propose()`` は ``((idx_a, new_age_a), (idx_b, new_age_b))`` を返し、
+    ``new_age_a == old_age_b`` および ``new_age_b == old_age_a``（年齢の交換）が成り立つ。
+
+    ハード制約は AgeChangeTransition と共通（§11.5）。swap 後の両 person について
+    role 静的制約（age >= 18 等）と動的制約（親子年齢差 >= 14）を検証する。
+    動的制約は **swap 前の状態**に基づき precompute された値を使う（保守的判定）。
+
+    Parameters
+    ----------
+    arrays : PopulationArrays
+        SA の状態配列。propose() は副作用なし。
+    demo_by_age_sex : list[DemographicByAgeSexRow]
+        現在は使用しない（API 互換のため）。
+    rng : np.random.Generator
+        乱数源。
+    demo_ft_role : list[DemographicByFamilyTypeRoleRow] | None
+        現在は使用しない（API 互換のため）。
+    """
+
+    def __init__(
+        self,
+        arrays: PopulationArrays,
+        demo_by_age_sex: list[DemographicByAgeSexRow],
+        rng: np.random.Generator,
+        demo_ft_role: list[DemographicByFamilyTypeRoleRow] | None = None,
+    ) -> None:
+        # demo_by_age_sex / demo_ft_role は AgeChangeTransition と signature を揃えるため
+        # 受け取るが、age-swap では年齢分布からの抽選を行わないので使用しない。
+        del demo_by_age_sex, demo_ft_role
+        self._arrays = arrays
+        self._rng = rng
+
+        # role id → name のマッピング
+        role_reg = arrays.role_reg
+        self._role_id_to_name: dict[int, str] = {}
+        for role_name in _ROLE_SEX_FILTER:
+            try:
+                rid = role_reg.id_of(role_name)
+                self._role_id_to_name[rid] = role_name
+            except KeyError:
+                pass
+
+        # ハード制約の動的部分: AgeChange と同じ pre-compute ロジックを再利用
+        self._dynamic_age_min, self._dynamic_age_max = _compute_dynamic_constraints(arrays)
+
+        # (family_type_id, sex_id) → list[person_idx] のプール（size >= 2 のみ）
+        self._pools: list[tuple[tuple[int, int], np.ndarray]] = self._build_swap_pools()
+
+    def _build_swap_pools(self) -> list[tuple[tuple[int, int], np.ndarray]]:
+        """同 family_type・同 sex で 2 人以上いるグループを列挙する.
+
+        Returns
+        -------
+        list[tuple[tuple[int, int], np.ndarray]]
+            ``[((family_type_id, sex_id), person_indices), ...]`` のリスト。
+            ``person_indices`` のサイズは 2 以上。
+        """
+        arrays = self._arrays
+        n = arrays.n_persons
+        pools: list[tuple[tuple[int, int], np.ndarray]] = []
+        if n == 0:
+            return pools
+
+        # family_type と sex の組合せごとに person index を集約
+        fts = arrays.family_type
+        sexes = arrays.sex
+        unique_fts = np.unique(fts)
+        unique_sexes = np.unique(sexes)
+        for ft_id in unique_fts:
+            for sex_id in unique_sexes:
+                mask = (fts == ft_id) & (sexes == sex_id)
+                indices = np.where(mask)[0]
+                if indices.size >= 2:
+                    pools.append(((int(ft_id), int(sex_id)), indices))
+        return pools
+
+    def _check_swap_constraint(self, person_idx: int, new_age: int) -> bool:
+        """person_idx を new_age にした場合のハード制約を検証する."""
+        if new_age < AGE_MIN or new_age > AGE_MAX:
+            return False
+        role_id = int(self._arrays.role[person_idx])
+        role_name = self._role_id_to_name.get(role_id, "")
+        static_min = _ROLE_AGE_MIN.get(role_name, AGE_MIN)
+        static_max = _ROLE_AGE_MAX.get(role_name, AGE_MAX)
+        if new_age < static_min or new_age > static_max:
+            return False
+        dyn_min = int(self._dynamic_age_min[person_idx])
+        dyn_max = int(self._dynamic_age_max[person_idx])
+        if dyn_min >= 0 and new_age < dyn_min:
+            return False
+        return not (dyn_max >= 0 and new_age > dyn_max)
+
+    def propose(self) -> tuple[tuple[int, int], tuple[int, int]]:
+        """同 family_type 同 sex の 2 人を選んで年齢を交換する提案を返す（副作用なし）.
+
+        Returns
+        -------
+        tuple[tuple[int, int], tuple[int, int]]
+            ``((idx_a, new_age_a), (idx_b, new_age_b))``。
+            ``new_age_a == arrays.age[idx_b]``、``new_age_b == arrays.age[idx_a]``。
+
+        Raises
+        ------
+        TransitionError
+            プールが空（同 family_type 同 sex で 2 人組が存在しない）、または
+            MAX_RETRY 回 retry してもハード制約を満たすペアが見つからない場合。
+        """
+        if not self._pools:
+            msg = "AgeSwapTransition: 同 family_type 同 sex の 2 人組プールが空です"
+            raise TransitionError(msg)
+
+        for _ in range(MAX_RETRY):
+            # プールを 1 つ選び、その中から 2 人を抽選
+            pool_idx = int(self._rng.integers(0, len(self._pools)))
+            _, indices = self._pools[pool_idx]
+            chosen = self._rng.choice(indices, size=2, replace=False)
+            idx_a, idx_b = int(chosen[0]), int(chosen[1])
+
+            old_age_a = int(self._arrays.age[idx_a])
+            old_age_b = int(self._arrays.age[idx_b])
+            # swap が無意味（同年齢）ならスキップして retry
+            if old_age_a == old_age_b:
+                continue
+
+            new_age_a = old_age_b
+            new_age_b = old_age_a
+            if self._check_swap_constraint(idx_a, new_age_a) and self._check_swap_constraint(
+                idx_b, new_age_b
+            ):
+                return ((idx_a, new_age_a), (idx_b, new_age_b))
+
+        msg = (
+            f"AgeSwapTransition: {MAX_RETRY} 回の retry 後もハード制約を満たす"
+            f" swap ペアが見つかりませんでした"
+        )
+        raise TransitionError(msg)
+
+
+# ---------------------------------------------------------------------------
+# 内部ヘルパー: 動的制約の precompute（AgeSwapTransition から再利用）
+# ---------------------------------------------------------------------------
+
+
+def _compute_dynamic_constraints(arrays: PopulationArrays) -> tuple[np.ndarray, np.ndarray]:
+    """世帯内の親子制約から ``(dyn_min, dyn_max)`` 配列を計算する.
+
+    AgeChangeTransition._precompute_household_constraints と同じロジックの
+    module-level 抽出。AgeSwapTransition との共有のため。
+
+    Returns
+    -------
+    tuple[np.ndarray, np.ndarray]
+        ``(dynamic_age_min, dynamic_age_max)``。``-1`` は制約なしを意味する。
+    """
+    n = arrays.n_persons
+    dyn_min = np.full(n, -1, dtype=np.int64)
+    dyn_max = np.full(n, -1, dtype=np.int64)
+    if n == 0:
+        return dyn_min, dyn_max
+
+    role_reg = arrays.role_reg
+
+    def get_role_id(name: str) -> int | None:
+        try:
+            return role_reg.id_of(name)
+        except KeyError:
+            return None
+
+    father_id = get_role_id("father")
+    mother_id = get_role_id("mother")
+    parent_id = get_role_id("parent")
+    child_id = get_role_id("child")
+
+    parent_role_ids = {rid for rid in [father_id, mother_id, parent_id] if rid is not None}
+
+    if not parent_role_ids and child_id is None:
+        return dyn_min, dyn_max
+
+    hh_ids = arrays.household_id
+    roles = arrays.role
+    ages = arrays.age
+
+    for hh_id in np.unique(hh_ids):
+        mask = hh_ids == hh_id
+        hh_roles = roles[mask]
+        hh_ages = ages[mask].astype(np.int64)
+        hh_indices = np.where(mask)[0]
+
+        child_max_age = -1
+        if child_id is not None:
+            child_mask = hh_roles == child_id
+            if child_mask.any():
+                child_max_age = int(hh_ages[child_mask].max())
+
+        parent_min_age = -1
+        if parent_role_ids:
+            parent_mask = np.zeros(len(hh_roles), dtype=bool)
+            for pid in parent_role_ids:
+                parent_mask |= hh_roles == pid
+            if parent_mask.any():
+                parent_min_age = int(hh_ages[parent_mask].min())
+
+        for local_i, global_i in enumerate(hh_indices):
+            role_id = int(hh_roles[local_i])
+            if role_id in parent_role_ids and child_max_age >= 0:
+                dyn_min[global_i] = child_max_age + PARENT_CHILD_AGE_GAP
+            elif child_id is not None and role_id == child_id and parent_min_age >= 0:
+                dyn_max[global_i] = parent_min_age - PARENT_CHILD_AGE_GAP
+
+    return dyn_min, dyn_max

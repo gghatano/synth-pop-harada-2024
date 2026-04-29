@@ -22,6 +22,7 @@ from synthpop_jp.io.schemas import DemographicByAgeSexRow, DemographicByFamilyTy
 from synthpop_jp.optimize.state import PopulationArrays
 from synthpop_jp.optimize.transitions import (
     AgeChangeTransition,
+    AgeSwapTransition,
     TransitionError,
     build_role_age_dist,
 )
@@ -647,3 +648,172 @@ class TestPerformanceSkeleton:
         assert avg_us < 100.0, (
             f"propose() の平均時間 {avg_us:.1f}μs が 100μs を超えた（skeleton チェック）"
         )
+
+
+# ---------------------------------------------------------------------------
+# AgeSwapTransition (Issue #57, Phase 3a §12.2B)
+# ---------------------------------------------------------------------------
+
+
+class TestAgeSwapPropose:
+    """AgeSwapTransition.propose() の基本挙動."""
+
+    def test_swap_returns_two_pairs(self) -> None:
+        """propose は ((idx_a, new_age_a), (idx_b, new_age_b)) を返す."""
+        # 同 family_type、同 sex で 2 人とも valid swap 可能な構成
+        # （single 世帯 2 つ → 各 single の role 制約 age>=18 を満たす）
+        arrays = make_multi_household_arrays(
+            [
+                ("single", [("single", "M", 30)]),
+                ("single", [("single", "M", 35)]),
+            ]
+        )
+        demo = make_demo_by_age_sex()
+        rng = SeedRegistry(root=42).rng("sa_transition")
+        transition = AgeSwapTransition(arrays=arrays, demo_by_age_sex=demo, rng=rng)
+
+        result = transition.propose()
+        ((idx_a, new_age_a), (idx_b, new_age_b)) = result
+        assert isinstance(idx_a, int)
+        assert isinstance(idx_b, int)
+        assert idx_a != idx_b
+        assert isinstance(new_age_a, int)
+        assert isinstance(new_age_b, int)
+
+    def test_swap_semantics_age_exchange(self) -> None:
+        """new_age_a == old_age_b かつ new_age_b == old_age_a（年齢交換）."""
+        arrays = make_multi_household_arrays(
+            [
+                ("single", [("single", "M", 30)]),
+                ("single", [("single", "M", 35)]),
+            ]
+        )
+        demo = make_demo_by_age_sex()
+        rng = SeedRegistry(root=42).rng("sa_transition")
+        transition = AgeSwapTransition(arrays=arrays, demo_by_age_sex=demo, rng=rng)
+
+        ((idx_a, new_age_a), (idx_b, new_age_b)) = transition.propose()
+        assert int(arrays.age[idx_a]) == new_age_b
+        assert int(arrays.age[idx_b]) == new_age_a
+
+
+class TestAgeSwapSelectionLogic:
+    """選択ロジック: 同 family_type かつ同 sex の 2 人だけが組になる."""
+
+    def test_same_family_type(self) -> None:
+        """選ばれた 2 人は同じ family_type に属する."""
+        # single 世帯 2 つ + couple 世帯 2 つ。同じ family_type 内でしか swap しない
+        arrays = make_multi_household_arrays(
+            [
+                ("single", [("single", "M", 30)]),
+                ("single", [("single", "M", 35)]),
+                ("couple", [("husband", "M", 40), ("wife", "F", 38)]),
+                ("couple", [("husband", "M", 45), ("wife", "F", 42)]),
+            ]
+        )
+        demo = make_demo_by_age_sex()
+        rng = SeedRegistry(root=42).rng("sa_transition")
+        transition = AgeSwapTransition(arrays=arrays, demo_by_age_sex=demo, rng=rng)
+
+        for _ in range(30):
+            ((idx_a, _), (idx_b, _)) = transition.propose()
+            assert int(arrays.family_type[idx_a]) == int(arrays.family_type[idx_b])
+
+    def test_same_sex(self) -> None:
+        """選ばれた 2 人は同じ sex を持つ."""
+        # 同 family_type 内で M 2 人と F 2 人を持つ構成（couple × 2 世帯）
+        arrays = make_multi_household_arrays(
+            [
+                ("couple", [("husband", "M", 40), ("wife", "F", 38)]),
+                ("couple", [("husband", "M", 45), ("wife", "F", 42)]),
+            ]
+        )
+        demo = make_demo_by_age_sex()
+        rng = SeedRegistry(root=42).rng("sa_transition")
+        transition = AgeSwapTransition(arrays=arrays, demo_by_age_sex=demo, rng=rng)
+
+        for _ in range(30):
+            ((idx_a, _), (idx_b, _)) = transition.propose()
+            assert int(arrays.sex[idx_a]) == int(arrays.sex[idx_b])
+
+
+class TestAgeSwapHardConstraints:
+    """Parent-child 年齢差制約（§11.5）が swap 後も保たれる."""
+
+    def test_swap_avoids_parent_child_violation(self) -> None:
+        """child と father の swap で年齢差が 14 未満になるケースは選ばれない."""
+        # father=20, child=18 の世帯。swap すると father=18 / child=20 で違反。
+        # ただし father=M, child=F なら sex が違うのでそもそも swap 不可
+        # → father=M, child=M で同 sex かつ親子年齢差が際どいケースを構築
+        arrays = make_arrays_single_household(
+            family_type="couple_and_children",
+            members=[
+                ("father", "M", 35),
+                ("mother", "F", 30),
+                ("child", "M", 22),  # 35 - 22 = 13 < 14, 元から 14 ギャップ未満
+            ],
+        )
+        # ↑ 元から制約違反のため、swap も violation を回避できないので
+        # 別構成: 父 40, 子 24（M）→ swap すると父 24, 子 40 で 16 < 14 違反
+        arrays = make_arrays_single_household(
+            family_type="couple_and_children",
+            members=[
+                ("father", "M", 40),
+                ("mother", "F", 38),
+                ("child", "M", 18),
+            ],
+        )
+        demo = make_demo_by_age_sex()
+        rng = SeedRegistry(root=42).rng("sa_transition")
+        transition = AgeSwapTransition(arrays=arrays, demo_by_age_sex=demo, rng=rng)
+
+        # この世帯では father (M) と child (M) のペアしか同 sex 候補がないが
+        # swap すると父 18 / 子 40 で 22 < 14 を満たすが、子 40 は role=child の上限を超える
+        # → 唯一可能なペアが制約違反のため、propose() は TransitionError を raise する
+        with pytest.raises(TransitionError):
+            transition.propose()
+
+
+class TestAgeSwapEmptyPool:
+    """同 family_type 同 sex で 2 人未満のプールでは TransitionError を返す."""
+
+    def test_no_compatible_pair(self) -> None:
+        """各 family_type/sex に 1 人ずつしかいない場合 TransitionError."""
+        arrays = make_arrays_single_household(
+            family_type="couple",
+            members=[
+                ("husband", "M", 35),
+                ("wife", "F", 33),
+            ],
+        )
+        demo = make_demo_by_age_sex()
+        rng = SeedRegistry(root=42).rng("sa_transition")
+        transition = AgeSwapTransition(arrays=arrays, demo_by_age_sex=demo, rng=rng)
+        with pytest.raises(TransitionError):
+            transition.propose()
+
+
+class TestAgeSwapDeterminism:
+    """同 seed で propose() 列が再現する."""
+
+    def test_same_seed_same_sequence(self) -> None:
+        def build_arrays() -> PopulationArrays:
+            return make_multi_household_arrays(
+                [
+                    ("single", [("single", "M", 30)]),
+                    ("single", [("single", "M", 35)]),
+                    ("single", [("single", "M", 40)]),
+                    ("couple", [("husband", "M", 50), ("wife", "F", 48)]),
+                    ("couple", [("husband", "M", 55), ("wife", "F", 52)]),
+                ]
+            )
+
+        demo = make_demo_by_age_sex()
+        rng1 = SeedRegistry(root=42).rng("sa_transition")
+        t1 = AgeSwapTransition(arrays=build_arrays(), demo_by_age_sex=demo, rng=rng1)
+        rng2 = SeedRegistry(root=42).rng("sa_transition")
+        t2 = AgeSwapTransition(arrays=build_arrays(), demo_by_age_sex=demo, rng=rng2)
+
+        seq1 = [t1.propose() for _ in range(10)]
+        seq2 = [t2.propose() for _ in range(10)]
+        assert seq1 == seq2
