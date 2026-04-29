@@ -28,7 +28,11 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from synthpop_jp.optimize.transitions import AgeSwapTransition, TransitionError
+from synthpop_jp.optimize.transitions import (
+    AgeSwapTransition,
+    HybridTransition,
+    TransitionError,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -154,7 +158,7 @@ class _RichProgressCtx:
 
 
 def _propose_with_apply_callback(
-    transition: AgeChangeTransition | AgeSwapTransition,
+    transition: AgeChangeTransition | AgeSwapTransition | HybridTransition,
     objective: ObjectiveState,
 ) -> tuple[float, Callable[[], None]]:
     """Run ``transition.propose()`` and return ``(delta, apply_callback)``.
@@ -163,11 +167,17 @@ def _propose_with_apply_callback(
     objective に呼ぶメソッドが異なるため、SA loop 側を 1 経路に保つために本関数で
     分岐を吸収する。``apply_callback`` を呼ぶと変更が atomic に内部状態へ反映される。
 
+    Issue #67: HybridTransition は内部で 2 種を保持するので、まず ``choose()`` で
+    実体を 1 つに解決してから既存ロジックを再利用する（再帰呼び出し）。
+
     Raises
     ------
     TransitionError
         transition.propose がハード制約違反で諦めた場合。
     """
+    if isinstance(transition, HybridTransition):
+        return _propose_with_apply_callback(transition.choose(), objective)
+
     if isinstance(transition, AgeSwapTransition):
         (idx_a, age_a_new), (idx_b, age_b_new) = transition.propose()
         delta = objective.propose_swap(idx_a, age_a_new, idx_b, age_b_new)
@@ -304,7 +314,7 @@ class SARunner:
         *,
         arrays: PopulationArrays,
         objective: ObjectiveState,
-        transition: AgeChangeTransition | AgeSwapTransition,
+        transition: AgeChangeTransition | AgeSwapTransition | HybridTransition,
         cooling: CoolingSchedule,
         config: AnnealingConfig,
         trace_path: Path | None = None,

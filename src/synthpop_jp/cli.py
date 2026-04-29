@@ -335,7 +335,11 @@ def generate(
     from synthpop_jp.optimize.annealing import SARunner
     from synthpop_jp.optimize.cooling import ExponentialCooling
     from synthpop_jp.optimize.objective import ObjectiveState
-    from synthpop_jp.optimize.transitions import AgeChangeTransition, AgeSwapTransition
+    from synthpop_jp.optimize.transitions import (
+        AgeChangeTransition,
+        AgeSwapTransition,
+        HybridTransition,
+    )
     from synthpop_jp.rng import SeedRegistry
 
     logging.basicConfig(level=getattr(logging, log_level.value))
@@ -452,13 +456,32 @@ def generate(
         f"evals_per_agent={annealing_cfg.evals_per_agent})"
     )
 
-    transition: AgeChangeTransition | AgeSwapTransition
+    transition: AgeChangeTransition | AgeSwapTransition | HybridTransition
     if annealing_cfg.transition_kind == "age-swap":
         transition = AgeSwapTransition(
             arrays=arrays,
             demo_by_age_sex=demographic_by_age_sex,
             rng=seed_reg.rng("sa_transition"),
             demo_ft_role=demographic_by_family_type_role,
+        )
+    elif annealing_cfg.transition_kind == "hybrid":
+        change = AgeChangeTransition(
+            arrays=arrays,
+            demo_by_age_sex=demographic_by_age_sex,
+            rng=seed_reg.rng("sa_change"),
+            demo_ft_role=demographic_by_family_type_role,
+        )
+        swap = AgeSwapTransition(
+            arrays=arrays,
+            demo_by_age_sex=demographic_by_age_sex,
+            rng=seed_reg.rng("sa_swap"),
+            demo_ft_role=demographic_by_family_type_role,
+        )
+        transition = HybridTransition(
+            change=change,
+            swap=swap,
+            p_change=annealing_cfg.p_change,
+            rng=seed_reg.rng("sa_hybrid_chooser"),
         )
     else:
         transition = AgeChangeTransition(

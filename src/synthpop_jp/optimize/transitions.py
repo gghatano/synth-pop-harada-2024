@@ -1,4 +1,4 @@
-"""Transition operators (age-change Phase 2, age-swap Phase 3a).
+"""Transition operators (age-change Phase 2, age-swap Phase 3a, hybrid Phase 3a).
 
 このモジュールは SA（シミュレーテッドアニーリング）の候補解生成を担う。
 
@@ -7,6 +7,9 @@
   ``propose() -> (person_idx, new_age)``
 - ``AgeSwapTransition``: §12.2B. 同 family_type 同 sex の 2 人の age を交換する遷移
   （Phase 3a, Issue #57）。``propose() -> ((idx_a, new_age_a), (idx_b, new_age_b))``
+- ``HybridTransition``: §12.2C. ``AgeChangeTransition`` と ``AgeSwapTransition`` を
+  確率 ``p_change`` / ``1 - p_change`` で混合する遷移（Phase 3a, Issue #67）。
+  SA loop 側は ``hybrid.choose()`` で内部 transition を取り出し既存ロジックを再利用する。
 
 ハード制約一覧（両遷移で共通）
 ------------------------------
@@ -642,3 +645,66 @@ def _compute_dynamic_constraints(arrays: PopulationArrays) -> tuple[np.ndarray, 
                 dyn_max[global_i] = parent_min_age - PARENT_CHILD_AGE_GAP
 
     return dyn_min, dyn_max
+
+
+# ---------------------------------------------------------------------------
+# HybridTransition (§12.2C, Phase 3a Issue #67)
+# ---------------------------------------------------------------------------
+
+
+class HybridTransition:
+    """``AgeChangeTransition`` と ``AgeSwapTransition`` の確率混合遷移.
+
+    spec §12.2C: 各 SA 反復で確率 ``p_change`` で AgeChange、
+    ``1 - p_change`` で AgeSwap を選択する。
+    どちらが選ばれたかで propose() の戻り値型が異なるため、本クラス自身は
+    propose() を持たず、SA loop 側に ``choose()`` で内部 transition を返す。
+
+    Parameters
+    ----------
+    change : AgeChangeTransition
+        age-change 遷移インスタンス。
+    swap : AgeSwapTransition
+        age-swap 遷移インスタンス。
+    p_change : float
+        AgeChange を選ぶ確率 (0.0–1.0)。残りが AgeSwap の確率。
+    rng : np.random.Generator
+        どちらを選ぶかの乱数源（SeedRegistry の独立 stream を渡す）。
+
+    Raises
+    ------
+    ValueError
+        ``p_change`` が ``[0.0, 1.0]`` の範囲外のとき。
+
+    Notes
+    -----
+    動的スケジュール（反復に応じた p_change 変化）は spec §12.2C で示唆されているが
+    本実装では固定確率のみ。スケジュール対応は後続 Issue で。
+    """
+
+    def __init__(
+        self,
+        change: AgeChangeTransition,
+        swap: AgeSwapTransition,
+        p_change: float,
+        rng: np.random.Generator,
+    ) -> None:
+        if not (0.0 <= p_change <= 1.0):
+            msg = f"p_change は [0.0, 1.0] の範囲でなければなりません (got {p_change})"
+            raise ValueError(msg)
+        self._change = change
+        self._swap = swap
+        self._p_change = float(p_change)
+        self._rng = rng
+
+    def choose(self) -> AgeChangeTransition | AgeSwapTransition:
+        """乱数で AgeChange / AgeSwap のどちらか 1 つを返す.
+
+        Returns
+        -------
+        AgeChangeTransition | AgeSwapTransition
+            各呼び出し時点で確率的に選ばれる内部 transition。
+        """
+        if self._rng.uniform() < self._p_change:
+            return self._change
+        return self._swap

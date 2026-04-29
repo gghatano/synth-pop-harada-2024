@@ -279,3 +279,43 @@ class TestGenerateResume:
             ],
         )
         assert result.exit_code == 1, f"exit code は 1 であるべき: got {result.exit_code}"
+
+
+@pytest.mark.slow
+class TestGenerateHybridTransition:
+    """hybrid 遷移を選択した generate の統合テスト (Issue #67)."""
+
+    def _make_hybrid_config(self, tmp_path: Path) -> Path:
+        config_data: dict[str, object] = {
+            "seed": 42,
+            "input_dir": str(SAMPLE_CASE_DIR),
+            "output_dir": str(tmp_path / "out"),
+            "annealing": {
+                "T0": 100.0,
+                "alpha": 0.99,
+                "max_iters": 200,
+                "evals_per_agent": 0,
+                "target_threshold": 0.0,
+                "patience": 0,
+                "transition_kind": "hybrid",
+                "p_change": 0.7,
+                "p_swap": 0.3,
+            },
+        }
+        config_path = tmp_path / "config_hybrid.yaml"
+        config_path.write_text(yaml.dump(config_data))
+        return config_path
+
+    def test_hybrid_generate_exits_0(self, tmp_path: Path) -> None:
+        """hybrid 設定で generate が exit 0 で完走する."""
+        config_path = self._make_hybrid_config(tmp_path)
+        result = runner.invoke(app, ["generate", "--config", str(config_path)])
+        assert result.exit_code == 0, result.output + str(result.exception or "")
+
+    def test_hybrid_generate_creates_outputs(self, tmp_path: Path) -> None:
+        """hybrid 設定で synthetic_persons.csv と metrics.json が生成される."""
+        config_path = self._make_hybrid_config(tmp_path)
+        result = runner.invoke(app, ["generate", "--config", str(config_path)])
+        assert result.exit_code == 0, result.output
+        assert (tmp_path / "out" / "synthetic_persons.csv").exists()
+        assert (tmp_path / "out" / "metrics.json").exists()

@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from synthpop_jp.config import Settings
+from synthpop_jp.config import AnnealingConfig, Settings
 
 
 class TestSettings:
@@ -64,3 +64,41 @@ class TestSettings:
 
         s = Settings.from_yaml(config_path)
         assert s.seed == 99
+
+
+class TestAnnealingConfigHybrid:
+    """hybrid 遷移の確率パラメータ validator (Issue #67)."""
+
+    def test_hybrid_with_default_probabilities_is_valid(self) -> None:
+        """hybrid + default p_change/p_swap (0.7+0.3) は valid."""
+        cfg = AnnealingConfig(transition_kind="hybrid")
+        assert cfg.p_change == 0.7
+        assert cfg.p_swap == 0.3
+
+    def test_hybrid_explicit_valid_split(self) -> None:
+        """hybrid + 任意の和=1.0 ペアは valid."""
+        cfg = AnnealingConfig(transition_kind="hybrid", p_change=0.4, p_swap=0.6)
+        assert cfg.p_change == 0.4
+        assert cfg.p_swap == 0.6
+
+    def test_hybrid_with_sum_not_one_rejected(self) -> None:
+        """hybrid + p_change + p_swap != 1.0 は ValidationError."""
+        with pytest.raises(ValidationError):
+            AnnealingConfig(transition_kind="hybrid", p_change=0.5, p_swap=0.6)
+
+    def test_hybrid_with_negative_p_change_rejected(self) -> None:
+        """負の p_change は ValidationError."""
+        with pytest.raises(ValidationError):
+            AnnealingConfig(transition_kind="hybrid", p_change=-0.1, p_swap=1.1)
+
+    def test_non_hybrid_keeps_default_probabilities(self) -> None:
+        """age-change/age-swap では p_change/p_swap の default が残っても valid."""
+        cfg = AnnealingConfig(transition_kind="age-change")
+        assert cfg.transition_kind == "age-change"
+        assert cfg.p_change == 0.7
+        assert cfg.p_swap == 0.3
+
+    def test_non_hybrid_skips_validation(self) -> None:
+        """age-change で p_change + p_swap != 1.0 でも validator は通る."""
+        cfg = AnnealingConfig(transition_kind="age-change", p_change=0.1, p_swap=0.1)
+        assert cfg.transition_kind == "age-change"
