@@ -13,12 +13,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import re
 import subprocess
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass
 from datetime import timedelta
+from pathlib import Path
 from typing import Literal
 
 from rich.console import Console
@@ -42,6 +44,8 @@ class WorktreeInfo:
     progress_comment_count: int
     pr_number: int | None
     pr_state: str | None
+    # Issue #52: experiments/*/WEIGHT.md の集約結果（"heavy" / "light" / None）
+    weight: str | None = None
 
 
 @dataclass
@@ -89,6 +93,50 @@ def _run_cmd(args: list[str], cwd: str | None = None) -> str:
 # ---------------------------------------------------------------------------
 # worktree 情報収集
 # ---------------------------------------------------------------------------
+
+
+def _detect_weight(worktree_path: str) -> str | None:
+    """Aggregate experiments/*/WEIGHT.md within a worktree to a single tier.
+
+    Issue #52: PM が「この worktree は重実験を含むか」を 1 値で判断するための関数。
+    max-rule で集約する: heavy が 1 つでもあれば "heavy"、全て light なら "light"、
+    どれも無ければ None。
+
+    Parameters
+    ----------
+    worktree_path : str
+        worktree のルートパス。
+
+    Returns
+    -------
+    str | None
+        "heavy" / "light" / None。
+    """
+    exp_dir = Path(worktree_path) / "experiments"
+    if not exp_dir.is_dir():
+        return None
+
+    weights: list[str] = []
+    for weight_file in exp_dir.glob("*/WEIGHT.md"):
+        try:
+            content = weight_file.read_text(encoding="utf-8").strip()
+        except OSError:
+            continue
+        if content not in {"light", "heavy"}:
+            logger = logging.getLogger(__name__)
+            logger.warning(
+                "Unknown WEIGHT.md value %r in %s (expected 'light' or 'heavy')",
+                content,
+                weight_file,
+            )
+            continue
+        weights.append(content)
+
+    if not weights:
+        return None
+    if "heavy" in weights:
+        return "heavy"
+    return "light"
 
 
 def _get_issue_comment_counts(branch: str) -> tuple[bool, int]:
@@ -197,6 +245,7 @@ def _collect_single_worktree(path: str, branch: str) -> WorktreeInfo | None:
             progress_comment_count=progress_count,
             pr_number=pr_number,
             pr_state=pr_state,
+            weight=_detect_weight(path),
         )
     except Exception:
         return None
@@ -403,6 +452,8 @@ def build_worktree_table(infos: list[WorktreeInfo], stale_minutes: int) -> Table
     table.add_column("plan", justify="center")
     table.add_column("progress\ncomments", justify="right")
     table.add_column("PR")
+    # Issue #52: 重実験フラグ
+    table.add_column("weight", justify="center")
 
     for info in infos:
         staleness = determine_staleness(info.last_commit_age, stale_minutes)
@@ -416,6 +467,12 @@ def build_worktree_table(infos: list[WorktreeInfo], stale_minutes: int) -> Table
         age_str = _format_age(info.last_commit_age)
         plan_str = "✅" if info.plan_comment_exists else "—"
         pr_str = f"#{info.pr_number} [{info.pr_state}]" if info.pr_number else "—"
+        if info.weight == "heavy":
+            weight_str = "⚠ heavy"
+        elif info.weight == "light":
+            weight_str = "light"
+        else:
+            weight_str = "—"
 
         table.add_row(
             f"{stale_mark}{path_short}",
@@ -426,6 +483,7 @@ def build_worktree_table(infos: list[WorktreeInfo], stale_minutes: int) -> Table
             plan_str,
             str(info.progress_comment_count),
             pr_str,
+            weight_str,
         )
 
     return table

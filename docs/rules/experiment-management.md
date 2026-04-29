@@ -59,6 +59,7 @@ experiments/
 | 解釈 | （非技術者にも通じる 1 段落） |
 | 制約 | サンプルが小地域 1 件のみ。一般化には追試必要 |
 | 次アクション | 条件を 5 小地域に拡大した追試を `experiments/2026-04-30-...` で実施 |
+| **ピーク RSS** | 例: 358MB（100k 世帯、N×iter ごとに記録）。Issue #51 ルール |
 
 ---
 
@@ -86,6 +87,30 @@ experiments/
 
 - `report.md` の「再現手順」欄に、1 コマンドで走る形を書く
   - 例: `uv run python experiments/2026-04-23-sa-convergence-baseline/run.py --config config.yaml`
+
+### 重さタグ（WEIGHT.md）
+
+実験ディレクトリ直下に `WEIGHT.md` を必ず 1 ファイル置きます。中身は `light` または `heavy` のどちらか 1 語のみ。
+
+```
+heavy
+```
+
+- **light**: SA 単独で peak RSS が概ね 200MB 以下に収まる軽い実験。N ≤ 10k 世帯が目安。
+- **heavy**: 並列稼働すると物理 RAM を圧迫しうる実験。**N ≥ 100k 世帯**を含む SA は heavy（Issue #51 実測 358MB が根拠）。
+
+`scripts/pm_status.py`（`make pm`）が `experiments/*/WEIGHT.md` を読み、worktree ごとに **「最も重いタグ」**を表示します。
+**heavy worktree が 1 本でも active な間は、新規 Agent の起動を控える**運用ルールです（詳細: [`.claude/skills/multi_agent_orchestration.md`](../../.claude/skills/multi_agent_orchestration.md) §「重実験 worktree が active な間は新規 Agent を起動しない」）。
+
+`light` / `heavy` 以外の値は無効として扱われ、warning ログを出して None として処理されます。
+
+### ピーク RSS の記録
+
+`report.md` の「結果」または「条件」欄に、計測したピーク RSS を必ず記載してください。
+
+- 計測手法は `experiments/2026-04-29-sa-memory-profile/peak_rss.py`（subprocess + `ps -o rss=` サンプリング）が参考実装
+- 計測値は規模（N、iter）と一緒に表で残す
+- 100k 世帯以上を含む実験では、計測値が `WEIGHT.md=heavy` の根拠になる
 
 ---
 
