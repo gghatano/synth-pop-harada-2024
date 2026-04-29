@@ -715,9 +715,7 @@ class ObjectiveState:
         # total_score を更新
         self.total_score += delta
 
-    def propose_swap(
-        self, idx_a: int, new_age_a: int, idx_b: int, new_age_b: int
-    ) -> float:
+    def propose_swap(self, idx_a: int, new_age_a: int, idx_b: int, new_age_b: int) -> float:
         """Age swap の合算 delta スコアを副作用なしで計算する.
 
         Issue #57 / §12.2B age-swap 用。実装は ``apply_change(idx_a)`` →
@@ -754,9 +752,7 @@ class ObjectiveState:
 
         return delta_a + delta_b
 
-    def apply_swap(
-        self, idx_a: int, new_age_a: int, idx_b: int, new_age_b: int
-    ) -> None:
+    def apply_swap(self, idx_a: int, new_age_a: int, idx_b: int, new_age_b: int) -> None:
         """Age swap を atomic に内部状態へ適用する.
 
         Issue #57 / §12.2B age-swap 用。``apply_change(idx_a)`` → ``apply_change(idx_b)``

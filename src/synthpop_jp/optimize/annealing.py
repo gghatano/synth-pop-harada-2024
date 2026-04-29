@@ -449,9 +449,7 @@ class SARunner:
                     # 遷移提案（ハード制約違反で TransitionError が起きたらスキップ）
                     # isinstance で型ガードし、delta + apply_callback を 1 経路で組み立てる
                     try:
-                        delta, apply_callback = _propose_with_apply_callback(
-                            transition, objective
-                        )
+                        delta, apply_callback = _propose_with_apply_callback(transition, objective)
                     except TransitionError:
                         iter_n += 1
                         state.iter = iter_n
