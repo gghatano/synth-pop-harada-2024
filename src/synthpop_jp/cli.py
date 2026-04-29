@@ -602,11 +602,13 @@ def evaluate(
     """合成人口の品質を評価し、metrics.json に結果を追記する.
 
     ``generate`` 出力ディレクトリ（``settings.output_dir``）の
-    ``synthetic_persons.csv`` から人口を再構築し、入力統計に対する L1 誤差を
-    統計別 + 合計で計算する。結果は同じ ``output_dir/metrics.json`` に
-    ``aggregate.l1.*`` キーとして追記される。
+    ``synthetic_persons.csv`` から人口を再構築し、以下の評価器を順番に実行する:
 
-    Phase 3.5 (Issue #59) で初版実装。CAP / rare cell / DCR 等は別 Issue で追加。
+    - ``AggregateStatL1Evaluator`` (Issue #59): 統計別 L1 誤差
+    - ``RareCellEvaluator`` (Issue #61): family_type×age cell の rare/unique 率
+
+    結果は ``output_dir/metrics.json`` に ``aggregate.l1.*`` および ``rare_cell.*``
+    キーとして追記される。CAP / DCR 等は後続 Issue で追加。
     """
     import json
     import logging
@@ -615,6 +617,7 @@ def evaluate(
 
     from synthpop_jp.config import Settings
     from synthpop_jp.evaluate.aggregate_metrics import AggregateStatL1Evaluator
+    from synthpop_jp.evaluate.rare_cell_metrics import RareCellEvaluator
     from synthpop_jp.io.loaders import (
         load_age_diff_couple,
         load_age_diff_parent_child,
@@ -661,12 +664,16 @@ def evaluate(
         settings.input_dir / "demographic_by_age_sex.csv"
     )
 
-    evaluator = AggregateStatL1Evaluator(
+    aggregate_evaluator = AggregateStatL1Evaluator(
         age_diff_parent_child=age_diff_parent_child,
         age_diff_couple=age_diff_couple,
         demographic_by_age_sex=demographic_by_age_sex,
     )
-    metrics = evaluator.evaluate(arrays)
+    rare_cell_evaluator = RareCellEvaluator()
+    metrics: dict[str, float] = {
+        **aggregate_evaluator.evaluate(arrays),
+        **rare_cell_evaluator.evaluate(arrays),
+    }
 
     # metrics.json に追記（既存キーは保持）
     metrics_path = settings.output_dir / "metrics.json"

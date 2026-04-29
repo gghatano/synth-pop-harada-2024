@@ -11,7 +11,6 @@
 from __future__ import annotations
 
 import numpy as np
-import pytest
 
 from synthpop_jp.domain.household import Household
 from synthpop_jp.domain.person import Person
@@ -146,23 +145,11 @@ class TestRareCellEvaluatorMath:
         evaluator = RareCellEvaluator()
         result = evaluator.evaluate(arrays)
         # single: 3 unique cells / 3 = 1.0
-        assert (
-            abs(result["rare_cell.per_family_type.fraction_unique.single"] - 1.0)
-            < 1e-9
-        )
-        assert (
-            abs(result["rare_cell.per_family_type.fraction_below_5.single"] - 1.0)
-            < 1e-9
-        )
+        assert abs(result["rare_cell.per_family_type.fraction_unique.single"] - 1.0) < 1e-9
+        assert abs(result["rare_cell.per_family_type.fraction_below_5.single"] - 1.0) < 1e-9
         # couple: 1 cell, count=5, NOT < 5 → 0.0
-        assert (
-            abs(result["rare_cell.per_family_type.fraction_unique.couple"] - 0.0)
-            < 1e-9
-        )
-        assert (
-            abs(result["rare_cell.per_family_type.fraction_below_5.couple"] - 0.0)
-            < 1e-9
-        )
+        assert abs(result["rare_cell.per_family_type.fraction_unique.couple"] - 0.0) < 1e-9
+        assert abs(result["rare_cell.per_family_type.fraction_below_5.couple"] - 0.0) < 1e-9
 
 
 class TestRareCellEvaluatorEdgeCases:
@@ -182,9 +169,7 @@ class TestRareCellEvaluatorEdgeCases:
 
     def test_finite_values(self) -> None:
         """全 fraction 値が有限（NaN / inf でない）."""
-        arrays = _build_arrays(
-            [("single", "single", "M", 30), ("single", "single", "M", 31)]
-        )
+        arrays = _build_arrays([("single", "single", "M", 30), ("single", "single", "M", 31)])
         evaluator = RareCellEvaluator()
         result = evaluator.evaluate(arrays)
         for k, v in result.items():
