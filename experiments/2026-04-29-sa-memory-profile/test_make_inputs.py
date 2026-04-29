@@ -10,7 +10,6 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
-
 from make_inputs import COPY_CSVS, COUNT_CSVS, generate
 
 
