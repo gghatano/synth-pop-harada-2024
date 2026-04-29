@@ -447,6 +447,8 @@ def generate(
         age_diff_parent_child=age_diff_parent_child,
         age_diff_couple=age_diff_couple,
         demographic_by_age_sex=demographic_by_age_sex,
+        demo_ft_role=demographic_by_family_type_role,
+        use_family_type_pyramid=settings.objective.use_family_type_pyramid,
     )
     initial_score = objective.total_score
     console.print(f"[green]初期スコア:[/green] {initial_score:.1f}")
@@ -666,7 +668,9 @@ def evaluate(
         load_age_diff_couple,
         load_age_diff_parent_child,
         load_demographic_by_age_sex,
+        load_demographic_by_family_type_role,
     )
+    from synthpop_jp.io.schemas import DemographicByFamilyTypeRoleRow
     from synthpop_jp.io.synthesized import reconstruct_population_arrays_from_persons_csv
 
     logging.basicConfig(level=getattr(logging, log_level.value))
@@ -708,10 +712,18 @@ def evaluate(
         settings.input_dir / "demographic_by_age_sex.csv"
     )
 
+    # family_type 別 demographic pyramid (Issue #71)。任意入力。
+    demo_ft_role: list[DemographicByFamilyTypeRoleRow] | None = None
+    demo_ft_role_path = settings.input_dir / "demographic_by_family_type_role.csv"
+    if demo_ft_role_path.exists():
+        demo_ft_role = load_demographic_by_family_type_role(demo_ft_role_path)
+
     aggregate_evaluator = AggregateStatL1Evaluator(
         age_diff_parent_child=age_diff_parent_child,
         age_diff_couple=age_diff_couple,
         demographic_by_age_sex=demographic_by_age_sex,
+        demo_ft_role=demo_ft_role,
+        use_family_type_pyramid=settings.objective.use_family_type_pyramid,
     )
     rare_cell_evaluator = RareCellEvaluator()
     metrics: dict[str, float] = {

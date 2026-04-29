@@ -344,3 +344,37 @@ class TestGenerateHybridTransition:
         result = runner.invoke(app, ["generate", "--config", str(config_path)])
         assert result.exit_code == 0, result.output + str(result.exception or "")
         assert (tmp_path / "out" / "synthetic_persons.csv").exists()
+
+
+@pytest.mark.slow
+class TestGenerateExtendedObjective:
+    """family_type 別 pyramid 拡張モードの統合テスト (Issue #71)."""
+
+    def _make_extended_config(self, tmp_path: Path) -> Path:
+        config_data: dict[str, object] = {
+            "seed": 42,
+            "input_dir": str(SAMPLE_CASE_DIR),
+            "output_dir": str(tmp_path / "out"),
+            "annealing": {
+                "T0": 100.0,
+                "alpha": 0.99,
+                "max_iters": 200,
+                "evals_per_agent": 0,
+                "target_threshold": 0.0,
+                "patience": 0,
+            },
+            "objective": {
+                "use_family_type_pyramid": True,
+            },
+        }
+        config_path = tmp_path / "config_extended.yaml"
+        config_path.write_text(yaml.dump(config_data))
+        return config_path
+
+    def test_extended_generate_exits_0(self, tmp_path: Path) -> None:
+        """use_family_type_pyramid=True の config で generate が完走する."""
+        config_path = self._make_extended_config(tmp_path)
+        result = runner.invoke(app, ["generate", "--config", str(config_path)])
+        assert result.exit_code == 0, result.output + str(result.exception or "")
+        assert (tmp_path / "out" / "synthetic_persons.csv").exists()
+        assert (tmp_path / "out" / "metrics.json").exists()
