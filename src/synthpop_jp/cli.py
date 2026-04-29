@@ -638,6 +638,13 @@ def evaluate(
             help="CAP/TCAP 計算に使う real 個票 CSV。省略時は CAP をスキップ。",
         ),
     ] = None,
+    no_report: Annotated[
+        bool,
+        typer.Option(
+            "--no-report",
+            help="report.md (Harada 2024 Table 13 形式) の出力を抑止する (Issue #78)。",
+        ),
+    ] = False,
     log_level: Annotated[
         LogLevel,
         typer.Option("--log-level", help="ログレベル。"),
@@ -767,6 +774,20 @@ def evaluate(
     for k, v in metrics.items():
         console.print(f"  {k}: {v:.1f}")
     console.print(f"[bold]metrics.json 更新:[/bold] {metrics_path}")
+
+    # Table 13 形式 Markdown レポート (Issue #78)
+    if not no_report:
+        from synthpop_jp.reports.markdown import render_metrics_table13
+
+        # existing は object 値も含むので、float 化できるものだけ通す
+        report_metrics: dict[str, float] = {}
+        for k, v in existing.items():
+            if isinstance(v, (int, float)):
+                report_metrics[k] = float(v)
+        report_md = render_metrics_table13(report_metrics)
+        report_path = settings.output_dir / "report.md"
+        report_path.write_text(report_md, encoding="utf-8")
+        console.print(f"[bold]report.md 更新:[/bold] {report_path}")
 
 
 @app.command()

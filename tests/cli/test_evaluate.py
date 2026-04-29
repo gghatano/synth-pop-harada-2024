@@ -156,6 +156,28 @@ class TestEvaluateIntegration:
         assert eval_result.exit_code == 1
         assert "real-persons-csv" in eval_result.output
 
+    def test_evaluate_writes_report_md_by_default(self, tmp_path: Path) -> None:
+        """evaluate 完了で output_dir/report.md が生成される (Issue #78)."""
+        config_path = _make_config_yaml(tmp_path)
+        runner.invoke(app, ["generate", "--config", str(config_path)])
+        result = runner.invoke(app, ["evaluate", "--config", str(config_path)])
+        assert result.exit_code == 0, result.output
+        report_path = tmp_path / "out" / "report.md"
+        assert report_path.exists()
+        report = report_path.read_text(encoding="utf-8")
+        assert report.startswith("# ")
+        assert "aggregate" in report.lower() or "L1" in report
+
+    def test_evaluate_no_report_flag_skips_report_md(self, tmp_path: Path) -> None:
+        """--no-report 指定で report.md が生成されない (Issue #78)."""
+        config_path = _make_config_yaml(tmp_path)
+        runner.invoke(app, ["generate", "--config", str(config_path)])
+        result = runner.invoke(app, ["evaluate", "--config", str(config_path), "--no-report"])
+        assert result.exit_code == 0, result.output
+        report_path = tmp_path / "out" / "report.md"
+        assert not report_path.exists()
+        assert (tmp_path / "out" / "metrics.json").exists()
+
     def test_evaluate_calls_entry_point_plugins(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
