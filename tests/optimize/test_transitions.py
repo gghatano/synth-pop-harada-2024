@@ -23,6 +23,7 @@ from synthpop_jp.optimize.state import PopulationArrays
 from synthpop_jp.optimize.transitions import (
     AgeChangeTransition,
     AgeSwapTransition,
+    HybridTransition,
     TransitionError,
     build_role_age_dist,
 )
@@ -817,3 +818,84 @@ class TestAgeSwapDeterminism:
         seq1 = [t1.propose() for _ in range(10)]
         seq2 = [t2.propose() for _ in range(10)]
         assert seq1 == seq2
+
+
+# ---------------------------------------------------------------------------
+# HybridTransition (Issue #67) — age-change と age-swap の確率混合
+# ---------------------------------------------------------------------------
+
+
+def _build_hybrid_pair(seed: int = 42) -> tuple[AgeChangeTransition, AgeSwapTransition]:
+    """テスト用の AgeChange/AgeSwap ペアを構築する."""
+    arrays = make_multi_household_arrays(
+        [
+            ("single", [("single", "M", 30)]),
+            ("single", [("single", "M", 35)]),
+            ("couple", [("husband", "M", 50), ("wife", "F", 48)]),
+            ("couple", [("husband", "M", 55), ("wife", "F", 52)]),
+        ]
+    )
+    demo = make_demo_by_age_sex()
+    seed_reg = SeedRegistry(root=seed)
+    change = AgeChangeTransition(arrays=arrays, demo_by_age_sex=demo, rng=seed_reg.rng("sa_change"))
+    swap = AgeSwapTransition(arrays=arrays, demo_by_age_sex=demo, rng=seed_reg.rng("sa_swap"))
+    return change, swap
+
+
+class TestHybridTransitionChoose:
+    """HybridTransition.choose() が確率に従って内部 transition を返す."""
+
+    def test_p_change_one_always_returns_change(self) -> None:
+        """p_change=1.0 で常に AgeChange が返る."""
+        change, swap = _build_hybrid_pair()
+        rng = SeedRegistry(root=42).rng("sa_hybrid_chooser")
+        hybrid = HybridTransition(change=change, swap=swap, p_change=1.0, rng=rng)
+        for _ in range(50):
+            assert hybrid.choose() is change
+
+    def test_p_change_zero_always_returns_swap(self) -> None:
+        """p_change=0.0 で常に AgeSwap が返る."""
+        change, swap = _build_hybrid_pair()
+        rng = SeedRegistry(root=42).rng("sa_hybrid_chooser")
+        hybrid = HybridTransition(change=change, swap=swap, p_change=0.0, rng=rng)
+        for _ in range(50):
+            assert hybrid.choose() is swap
+
+    def test_mixing_ratio_matches_p_change(self) -> None:
+        """大数で AgeChange の選択比率が p_change の許容範囲内."""
+        change, swap = _build_hybrid_pair()
+        rng = SeedRegistry(root=42).rng("sa_hybrid_chooser")
+        hybrid = HybridTransition(change=change, swap=swap, p_change=0.7, rng=rng)
+        n = 2000
+        chosen = [hybrid.choose() for _ in range(n)]
+        change_ratio = sum(1 for c in chosen if c is change) / n
+        # ±0.05 の許容範囲（n=2000 で 95% CI ≈ ±0.02）
+        assert 0.65 <= change_ratio <= 0.75
+
+
+class TestHybridTransitionDeterminism:
+    """同 seed で choose 列が再現する."""
+
+    def test_same_seed_same_choose_sequence(self) -> None:
+        def make_hybrid() -> HybridTransition:
+            change, swap = _build_hybrid_pair()
+            rng = SeedRegistry(root=99).rng("sa_hybrid_chooser")
+            return HybridTransition(change=change, swap=swap, p_change=0.5, rng=rng)
+
+        h1 = make_hybrid()
+        h2 = make_hybrid()
+        seq1 = [h1.choose() is h1._change for _ in range(20)]  # type: ignore[attr-defined]
+        seq2 = [h2.choose() is h2._change for _ in range(20)]  # type: ignore[attr-defined]
+        assert seq1 == seq2
+
+
+class TestHybridTransitionInvalidProbability:
+    """p_change が [0, 1] 外の場合は ValueError."""
+
+    def test_p_change_out_of_range_raises(self) -> None:
+        change, swap = _build_hybrid_pair()
+        rng = SeedRegistry(root=42).rng("sa_hybrid_chooser")
+        with pytest.raises(ValueError):
+            HybridTransition(change=change, swap=swap, p_change=1.5, rng=rng)
+        with pytest.raises(ValueError):
+            HybridTransition(change=change, swap=swap, p_change=-0.1, rng=rng)

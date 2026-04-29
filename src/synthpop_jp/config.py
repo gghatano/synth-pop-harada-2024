@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Literal
 
 import yaml
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 
 class AnnealingConfig(BaseModel):
@@ -62,10 +62,17 @@ class AnnealingConfig(BaseModel):
     checkpoint_dir : Path | None
         チェックポイントファイルの保存先ディレクトリ。
         None のときチェックポイントを保存しない。デフォルト None。
-    transition_kind : Literal["age-change", "age-swap"]
-        SA の遷移方式を選択する（Phase 3a Issue #57）。
-        ``"age-change"`` は §12.2A、``"age-swap"`` は §12.2B（同 family_type 同 sex の年齢交換）。
+    transition_kind : Literal["age-change", "age-swap", "hybrid"]
+        SA の遷移方式を選択する。
+        ``"age-change"`` は §12.2A、``"age-swap"`` は §12.2B（Issue #57）、
+        ``"hybrid"`` は §12.2C（Issue #67、p_change/p_swap で混合）。
         デフォルト ``"age-change"``。
+    p_change : float
+        ``transition_kind == "hybrid"`` で AgeChange を選ぶ確率。
+        デフォルト 0.7。``p_change + p_swap == 1.0`` が必要。
+    p_swap : float
+        ``transition_kind == "hybrid"`` で AgeSwap を選ぶ確率。
+        デフォルト 0.3。
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -80,7 +87,9 @@ class AnnealingConfig(BaseModel):
     trace_enabled: bool = True
     checkpoint_every_n_iters: int = 10000
     checkpoint_dir: Path | None = None
-    transition_kind: Literal["age-change", "age-swap"] = "age-change"
+    transition_kind: Literal["age-change", "age-swap", "hybrid"] = "age-change"
+    p_change: float = 0.7
+    p_swap: float = 0.3
 
     @field_validator("T0")
     @classmethod
@@ -99,6 +108,31 @@ class AnnealingConfig(BaseModel):
             msg = f"alpha は (0, 1] の範囲でなければなりません（alpha={v}）"
             raise ValueError(msg)
         return v
+
+    @model_validator(mode="after")
+    def validate_hybrid_probabilities(self) -> AnnealingConfig:
+        """``transition_kind == "hybrid"`` のとき p_change/p_swap を検証する.
+
+        - 両者とも ``[0.0, 1.0]`` の範囲
+        - 和が 1.0 (許容誤差 1e-6)
+
+        非 hybrid のときは検証しない（デフォルト値が残っても受理）。
+        """
+        if self.transition_kind == "hybrid":
+            if not (0.0 <= self.p_change <= 1.0) or not (0.0 <= self.p_swap <= 1.0):
+                msg = (
+                    "hybrid 遷移では p_change と p_swap を [0.0, 1.0] にしてください "
+                    f"(p_change={self.p_change}, p_swap={self.p_swap})"
+                )
+                raise ValueError(msg)
+            total = self.p_change + self.p_swap
+            if abs(total - 1.0) > 1e-6:
+                msg = (
+                    "hybrid 遷移では p_change + p_swap == 1.0 が必要です "
+                    f"(p_change={self.p_change}, p_swap={self.p_swap}, sum={total})"
+                )
+                raise ValueError(msg)
+        return self
 
 
 class Settings(BaseModel):
