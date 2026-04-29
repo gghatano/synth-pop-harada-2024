@@ -33,6 +33,17 @@ trace.jsonl のスキーマ（1 行 = 1 JSON object）::
 
     df = read_trace(Path("outputs/run/trace.jsonl"))
     print(df[["iter", "best_score"]].head())
+
+メモリ contract（Issue #53 監査）
+---------------------------------
+- ``TraceWriter.write()`` は受け取った ``event`` を直ちに 1 行 JSON として
+  ファイルに書き出す。in-memory バッファは持たない（OS の write buffer のみ）。
+- 反復数を増やしても ``TraceWriter`` インスタンス自体のメモリ使用量は不変
+  （保持するのは file handle 1 個のみ）。
+- Issue #51 の実測（2026-04-29）で確認済: 20k iter と 200k iter のピーク RSS は
+  誤差範囲（10k 世帯で 106MB → 108MB）。
+- ``read_trace()`` は逆に全行を ``list[dict]`` に展開してから DataFrame 化する。
+  200k 行で ~50MB のメモリを使うが、post-mortem 用途のため SA hot loop には影響しない。
 """
 
 from __future__ import annotations
