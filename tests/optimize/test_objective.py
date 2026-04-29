@@ -487,3 +487,95 @@ class TestPerformanceSkeleton:
         assert elapsed < 1.0, (
             f"1000 回の propose_change が {elapsed:.3f} 秒 かかった (avg={avg_us:.1f}μs/回)"
         )
+
+
+# ---------------------------------------------------------------------------
+# AgeSwap 用の API: propose_swap / apply_swap (Issue #57, Phase 3a §12.2B)
+# ---------------------------------------------------------------------------
+
+
+class TestProposeSwap:
+    """propose_swap は副作用なしで合算 delta を返す."""
+
+    def test_propose_swap_zero_for_same_index(self, objective: ObjectiveState) -> None:
+        """idx_a == idx_b なら 0 を返す."""
+        idx = 0
+        age = int(objective.arrays.age[idx])
+        delta = objective.propose_swap(idx, age, idx, age)
+        assert abs(delta) < 1e-9
+
+    def test_propose_swap_no_side_effect_on_score(self, objective: ObjectiveState) -> None:
+        """propose_swap 後も total_score が変わらない."""
+        before = objective.total_score
+        idx_a, idx_b = 0, 1
+        age_a = int(objective.arrays.age[idx_a])
+        age_b = int(objective.arrays.age[idx_b])
+        objective.propose_swap(idx_a, age_b, idx_b, age_a)
+        assert abs(objective.total_score - before) < 1e-9
+
+    def test_propose_swap_no_side_effect_on_arrays(self, objective: ObjectiveState) -> None:
+        """propose_swap 後も arrays.age が変わらない."""
+        idx_a, idx_b = 0, 1
+        age_a = int(objective.arrays.age[idx_a])
+        age_b = int(objective.arrays.age[idx_b])
+        objective.propose_swap(idx_a, age_b, idx_b, age_a)
+        assert int(objective.arrays.age[idx_a]) == age_a
+        assert int(objective.arrays.age[idx_b]) == age_b
+
+    def test_propose_swap_matches_apply_delta(self, objective: ObjectiveState) -> None:
+        """propose_swap の戻り値は apply_swap 後の total_score 差と一致."""
+        idx_a, idx_b = 0, 1
+        age_a = int(objective.arrays.age[idx_a])
+        age_b = int(objective.arrays.age[idx_b])
+        # 同年齢ならテストの意味が薄いので別の age を組む
+        if age_a == age_b:
+            return  # noqa: PLR0911 — fixture 由来の偶発的な同値はスキップ
+
+        before = objective.total_score
+        delta_proposed = objective.propose_swap(idx_a, age_b, idx_b, age_a)
+        objective.apply_swap(idx_a, age_b, idx_b, age_a)
+        observed_delta = objective.total_score - before
+        assert abs(delta_proposed - observed_delta) < 1e-6
+
+
+class TestApplySwap:
+    """apply_swap は両者の age を atomic に交換する."""
+
+    def test_apply_swap_swaps_ages(self, objective: ObjectiveState) -> None:
+        """apply_swap 後、arrays.age[a] = old_b, arrays.age[b] = old_a."""
+        idx_a, idx_b = 0, 1
+        old_a = int(objective.arrays.age[idx_a])
+        old_b = int(objective.arrays.age[idx_b])
+        objective.apply_swap(idx_a, old_b, idx_b, old_a)
+        assert int(objective.arrays.age[idx_a]) == old_b
+        assert int(objective.arrays.age[idx_b]) == old_a
+
+    def test_apply_swap_equivalent_to_sequential_apply(
+        self, objective: ObjectiveState, sample_arrays: PopulationArrays, objective_input
+    ) -> None:
+        """apply_swap の最終 score は apply_change(A)+apply_change(B) と一致."""
+        # 別 ObjectiveState を平行で作成
+        obj2 = ObjectiveState.from_arrays(
+            arrays=PopulationArrays(
+                age=sample_arrays.age.copy(),
+                sex=sample_arrays.sex.copy(),
+                role=sample_arrays.role.copy(),
+                household_id=sample_arrays.household_id.copy(),
+                family_type=sample_arrays.family_type.copy(),
+                _family_reg=sample_arrays._family_reg,
+                _role_reg=sample_arrays._role_reg,
+                _sex_reg=sample_arrays._sex_reg,
+            ),
+            **objective_input,
+        )
+        idx_a, idx_b = 0, 1
+        old_a = int(objective.arrays.age[idx_a])
+        old_b = int(objective.arrays.age[idx_b])
+        if old_a == old_b:
+            return
+
+        objective.apply_swap(idx_a, old_b, idx_b, old_a)
+        # obj2: 順次適用
+        obj2.apply_change(idx_a, old_b)
+        obj2.apply_change(idx_b, old_a)
+        assert abs(objective.total_score - obj2.total_score) < 1e-6
