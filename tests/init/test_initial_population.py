@@ -38,6 +38,7 @@ from synthpop_jp.io.loaders import (
 )
 from synthpop_jp.io.schemas import (
     DemographicByAgeSexRow,
+    DemographicByFamilyTypeRoleRow,
 )
 from synthpop_jp.rng import SeedRegistry
 
@@ -480,3 +481,193 @@ class TestDeterminism:
         assert np.array_equal(arrays1.role, arrays2.role)
         assert np.array_equal(arrays1.household_id, arrays2.household_id)
         assert np.array_equal(arrays1.family_type, arrays2.family_type)
+
+
+# ---------------------------------------------------------------------------
+# Issue #75: ft × role × sex 別 age プールが実際に活用されている保証
+# ---------------------------------------------------------------------------
+
+
+class TestFamilyTypeRoleSexAgePool:
+    """``demographic_by_family_type_role`` が assign_age で実際に効いているか.
+
+    このクラスは Issue #75 で追加した保証テスト。実装は既に存在するが、
+    ft × role × sex 別プールがフォールバック経路に落ちずに使われていることを
+    保証するためのカバレッジを追加する。
+    """
+
+    def test_ft_role_sex_pool_drives_age_when_present(self, sample_stats: InitStats) -> None:
+        """demo_ft_role を渡すと、対応する family_type の age 分布が target に近い.
+
+        極端な demo_ft_role を作って (couple, husband, M) の age を全部 30 にし、
+        生成人口でその組合せの person 全員が age=30 になることを確認する。
+        フォールバック (demographic_by_age_sex) なら一様分布 20-60 になるはずなので
+        100% 30 は ft × role × sex 別プールが使われた証左になる。
+        """
+        # couple 世帯 5 件のみの最小 stats
+        from synthpop_jp.io.schemas import (
+            ChildrenCountDistRow,
+            FamilyTypeCountRow,
+            HouseholdSizeByFamilyTypeRow,
+        )
+
+        ft_counts = [FamilyTypeCountRow(family_type="couple", count=5)]
+        children_dist = [
+            ChildrenCountDistRow(family_type_group="with_children", n_children=0, rate=1.0)
+        ]
+        # demographic_by_age_sex は均等 20-60 を全 sex で
+        demo_age_sex: list[DemographicByAgeSexRow] = []
+        for age in range(20, 65, 5):
+            demo_age_sex.append(DemographicByAgeSexRow(age=age, sex="M", count=10))
+            demo_age_sex.append(DemographicByAgeSexRow(age=age, sex="F", count=10))
+        # ft_role: couple husband M は age=30 のみ、couple wife F は age=28 のみ
+        demo_ft_role = [
+            DemographicByFamilyTypeRoleRow(
+                family_type="couple", role="husband", sex="M", age=30, count=100
+            ),
+            DemographicByFamilyTypeRoleRow(
+                family_type="couple", role="wife", sex="F", age=28, count=100
+            ),
+        ]
+        size_dist = [HouseholdSizeByFamilyTypeRow(family_type="couple", household_size=2, count=5)]
+        stats = InitStats(
+            family_type_counts=ft_counts,
+            children_count_dist=children_dist,
+            demographic_by_age_sex=demo_age_sex,
+            family_type_mapping=sample_stats.family_type_mapping,
+            household_size_by_family_type=size_dist,
+            demographic_by_family_type_role=demo_ft_role,
+        )
+
+        rng = SeedRegistry(root=42).rng("init")
+        arrays = generate_initial_population(stats, rng)
+
+        # couple_husband (M) は全員 age=30、couple_wife (F) は全員 age=28
+        husband_id = arrays.role_reg.id_of("husband")
+        wife_id = arrays.role_reg.id_of("wife")
+        m_id = arrays.sex_reg.id_of("M")
+        f_id = arrays.sex_reg.id_of("F")
+
+        husband_mask = (arrays.role == husband_id) & (arrays.sex == m_id)
+        wife_mask = (arrays.role == wife_id) & (arrays.sex == f_id)
+
+        husband_ages = arrays.age[husband_mask]
+        wife_ages = arrays.age[wife_mask]
+
+        assert len(husband_ages) == 5, "husband が 5 人いるはず"
+        assert len(wife_ages) == 5, "wife が 5 人いるはず"
+        assert all(int(a) == 30 for a in husband_ages), (
+            f"全 husband の age が 30 のはず: {husband_ages.tolist()}"
+        )
+        assert all(int(a) == 28 for a in wife_ages), (
+            f"全 wife の age が 28 のはず: {wife_ages.tolist()}"
+        )
+
+    def test_falls_back_when_ft_role_sex_pool_missing(self, sample_stats: InitStats) -> None:
+        """demo_ft_role に該当 (ft, role, sex) が無いとき、demographic_by_age_sex に
+        フォールバックしてハード制約を満たす age が選ばれる."""
+        from synthpop_jp.io.schemas import (
+            ChildrenCountDistRow,
+            FamilyTypeCountRow,
+            HouseholdSizeByFamilyTypeRow,
+        )
+
+        ft_counts = [FamilyTypeCountRow(family_type="couple", count=3)]
+        children_dist = [
+            ChildrenCountDistRow(family_type_group="with_children", n_children=0, rate=1.0)
+        ]
+        demo_age_sex: list[DemographicByAgeSexRow] = []
+        for age in range(20, 65, 5):
+            demo_age_sex.append(DemographicByAgeSexRow(age=age, sex="M", count=10))
+            demo_age_sex.append(DemographicByAgeSexRow(age=age, sex="F", count=10))
+        # demo_ft_role には couple は無い (single だけ) → フォールバックが発動するはず
+        demo_ft_role = [
+            DemographicByFamilyTypeRoleRow(
+                family_type="single", role="single", sex="M", age=40, count=100
+            ),
+        ]
+        size_dist = [HouseholdSizeByFamilyTypeRow(family_type="couple", household_size=2, count=3)]
+        stats = InitStats(
+            family_type_counts=ft_counts,
+            children_count_dist=children_dist,
+            demographic_by_age_sex=demo_age_sex,
+            family_type_mapping=sample_stats.family_type_mapping,
+            household_size_by_family_type=size_dist,
+            demographic_by_family_type_role=demo_ft_role,
+        )
+
+        rng = SeedRegistry(root=42).rng("init")
+        arrays = generate_initial_population(stats, rng)
+
+        # couple は demo_ft_role に無いのでフォールバック → age は 20-60 の範囲
+        # ハード制約 (husband/wife は >= 18) も満たす
+        husband_id = arrays.role_reg.id_of("husband")
+        m_id = arrays.sex_reg.id_of("M")
+        husband_mask = (arrays.role == husband_id) & (arrays.sex == m_id)
+        husband_ages = arrays.age[husband_mask]
+
+        assert len(husband_ages) == 3
+        for age in husband_ages:
+            assert 18 <= int(age) <= 100, f"フォールバック後の age が範囲外: {age}"
+
+    def test_extended_objective_score_differs_with_ft_role_sex_pool(
+        self, sample_stats: InitStats
+    ) -> None:
+        """demo_ft_role を渡したかどうかで extended objective の初期スコアが変わる.
+
+        想定: ft × role × sex 別プールが使われていれば年齢分布が変化し、
+        family_type pyramid を含む extended objective のスコアも変わる
+        （改善方向とは限らない、後述の regression note 参照）。
+
+        Regression note (Issue #75 plan):
+            sample_case では demo_ft_role 使用時のスコアが **悪化** することが
+            観測された (with=822 > without=799 at seed=42)。理由は
+            demographic_by_family_type_role の age 粒度が荒く、家族類型の
+            age 分布を狭く固定してしまうため、フォールバック (sex 別の幅広い
+            分布) よりも family_type pyramid target との合致が下がる。
+            これは「品質は実装と暗黙の仕様の組合せに依存する」典型例として
+            handoff doc / extended-summary に記録。
+        """
+        from synthpop_jp.io.loaders import load_age_diff_couple, load_age_diff_parent_child
+        from synthpop_jp.optimize.objective import ObjectiveState
+
+        age_diff_pc = load_age_diff_parent_child(_DATA_DIR / "age_diff_parent_child.csv")
+        age_diff_cp = load_age_diff_couple(_DATA_DIR / "age_diff_couple.csv")
+
+        # WITH demo_ft_role
+        rng_with = SeedRegistry(root=42).rng("init")
+        arrays_with = generate_initial_population(sample_stats, rng_with)
+        obj_with = ObjectiveState.from_arrays(
+            arrays=arrays_with,
+            age_diff_parent_child=age_diff_pc,
+            age_diff_couple=age_diff_cp,
+            demographic_by_age_sex=sample_stats.demographic_by_age_sex,
+            demo_ft_role=sample_stats.demographic_by_family_type_role,
+            use_family_type_pyramid=True,
+        )
+
+        # WITHOUT demo_ft_role (fallback to age_sex only)
+        stats_without = InitStats(
+            family_type_counts=sample_stats.family_type_counts,
+            children_count_dist=sample_stats.children_count_dist,
+            demographic_by_age_sex=sample_stats.demographic_by_age_sex,
+            family_type_mapping=sample_stats.family_type_mapping,
+            household_size_by_family_type=sample_stats.household_size_by_family_type,
+            demographic_by_family_type_role=None,
+        )
+        rng_without = SeedRegistry(root=42).rng("init")
+        arrays_without = generate_initial_population(stats_without, rng_without)
+        obj_without = ObjectiveState.from_arrays(
+            arrays=arrays_without,
+            age_diff_parent_child=age_diff_pc,
+            age_diff_couple=age_diff_cp,
+            demographic_by_age_sex=sample_stats.demographic_by_age_sex,
+            demo_ft_role=sample_stats.demographic_by_family_type_role,
+            use_family_type_pyramid=True,
+        )
+
+        # 「使われている」事実の保証: スコアが変わる
+        assert obj_with.total_score != obj_without.total_score, (
+            "demo_ft_role の渡し有無で初期スコアが変わるはず "
+            f"(with={obj_with.total_score}, without={obj_without.total_score})"
+        )
