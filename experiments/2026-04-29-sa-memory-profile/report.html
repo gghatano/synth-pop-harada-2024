@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>SA 実行ピーク RAM 実測 (Issue #51)</title>
+  <style>
+
+html {
+color: #1a1a1a;
+background-color: #fdfdfd;
+}
+body {
+margin: 0 auto;
+max-width: 36em;
+padding-left: 50px;
+padding-right: 50px;
+padding-top: 50px;
+padding-bottom: 50px;
+hyphens: auto;
+overflow-wrap: break-word;
+text-rendering: optimizeLegibility;
+font-kerning: normal;
+}
+@media (max-width: 600px) {
+body {
+font-size: 0.9em;
+padding: 12px;
+}
+h1 {
+font-size: 1.8em;
+}
+}
+@media print {
+html {
+background-color: white;
+}
+body {
+background-color: transparent;
+color: black;
+font-size: 12pt;
+}
+p, h2, h3 {
+orphans: 3;
+widows: 3;
+}
+h2, h3, h4 {
+page-break-after: avoid;
+}
+}
+p {
+margin: 1em 0;
+}
+a {
+color: #1a1a1a;
+}
+a:visited {
+color: #1a1a1a;
+}
+img {
+max-width: 100%;
+}
+svg {
+height: auto;
+max-width: 100%;
+}
+h1, h2, h3, h4, h5, h6 {
+margin-top: 1.4em;
+}
+h5, h6 {
+font-size: 1em;
+font-style: italic;
+}
+h6 {
+font-weight: normal;
+}
+ol, ul {
+padding-left: 1.7em;
+margin-top: 1em;
+}
+li > ol, li > ul {
+margin-top: 0;
+}
+blockquote {
+margin: 1em 0 1em 1.7em;
+padding-left: 1em;
+border-left: 2px solid #e6e6e6;
+color: #606060;
+}
+code {
+font-family: Menlo, Monaco, Consolas, 'Lucida Console', monospace;
+font-size: 85%;
+margin: 0;
+hyphens: manual;
+}
+pre {
+margin: 1em 0;
+overflow: auto;
+}
+pre code {
+padding: 0;
+overflow: visible;
+overflow-wrap: normal;
+}
+.sourceCode {
+background-color: transparent;
+overflow: visible;
+}
+hr {
+border: none;
+border-top: 1px solid #1a1a1a;
+height: 1px;
+margin: 1em 0;
+}
+table {
+margin: 1em 0;
+border-collapse: collapse;
+width: 100%;
+overflow-x: auto;
+display: block;
+font-variant-numeric: lining-nums tabular-nums;
+}
+table caption {
+margin-bottom: 0.75em;
+}
+tbody {
+margin-top: 0.5em;
+border-top: 1px solid #1a1a1a;
+border-bottom: 1px solid #1a1a1a;
+}
+th {
+border-top: 1px solid #1a1a1a;
+padding: 0.25em 0.5em 0.25em 0.5em;
+}
+td {
+padding: 0.125em 0.5em 0.25em 0.5em;
+}
+header {
+margin-bottom: 4em;
+text-align: center;
+}
+#TOC li {
+list-style: none;
+}
+#TOC ul {
+padding-left: 1.3em;
+}
+#TOC > ul {
+padding-left: 0;
+}
+#TOC a:not(:hover) {
+text-decoration: none;
+}
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+
+ul.task-list[class]{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+font-size: inherit;
+width: 0.8em;
+margin: 0 0.8em 0.2em -1.6em;
+vertical-align: middle;
+}
+.display.math{display: block; text-align: center; margin: 0.5rem auto;}
+
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+{ counter-reset: source-line 0; }
+pre.numberSource code > span
+{ position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+{ content: counter(source-line);
+position: relative; left: -1em; text-align: right; vertical-align: baseline;
+border: none; display: inline-block;
+-webkit-touch-callout: none; -webkit-user-select: none;
+-khtml-user-select: none; -moz-user-select: none;
+-ms-user-select: none; user-select: none;
+padding: 0 4px; width: 4em;
+color: #aaaaaa;
+}
+pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa; padding-left: 4px; }
+div.sourceCode
+{ }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+code span.al { color: #ff0000; font-weight: bold; } 
+code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.at { color: #7d9029; } 
+code span.bn { color: #40a070; } 
+code span.bu { color: #008000; } 
+code span.cf { color: #007020; font-weight: bold; } 
+code span.ch { color: #4070a0; } 
+code span.cn { color: #880000; } 
+code span.co { color: #60a0b0; font-style: italic; } 
+code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.do { color: #ba2121; font-style: italic; } 
+code span.dt { color: #902000; } 
+code span.dv { color: #40a070; } 
+code span.er { color: #ff0000; font-weight: bold; } 
+code span.ex { } 
+code span.fl { color: #40a070; } 
+code span.fu { color: #06287e; } 
+code span.im { color: #008000; font-weight: bold; } 
+code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.kw { color: #007020; font-weight: bold; } 
+code span.op { color: #666666; } 
+code span.ot { color: #007020; } 
+code span.pp { color: #bc7a00; } 
+code span.sc { color: #4070a0; } 
+code span.ss { color: #bb6688; } 
+code span.st { color: #4070a0; } 
+code span.va { color: #19177c; } 
+code span.vs { color: #4070a0; } 
+code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } 
+</style>
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">SA 実行ピーク RAM 実測 (Issue #51)</h1>
+</header>
+<h1 id="sa-実行ピーク-ram-実測">SA 実行ピーク RAM 実測</h1>
+<ul>
+<li>Issue: #51</li>
+<li>PR: （merge 後に追記）</li>
+<li>Branch: <code>feature/51-sa-memory-profile</code></li>
+<li>Commit: <code>e2681a0</code>（実験実行時点）</li>
+<li>実施日: 2026-04-29</li>
+<li>実施者: <span class="citation" data-cites="gghatano">@gghatano</span> (Claude Code)</li>
+</ul>
+<hr />
+<h2 id="非技術者向け要約">非技術者向け要約</h2>
+<p>合成人口を作る計算（SA:
+焼きなまし法と呼ぶ最適化）が、どのくらいパソコンの記憶領域（RAM）を使うかを測りました。
+1,000 / 10,000 / 100,000 世帯の 3 規模で計測した結果、<strong>100,000
+世帯でも 358MB</strong>（一般的なノート PC で 25GB あるうちの
+1.4%）に収まりました。 「PC が固まる」のは SA 単体ではなく、<strong>SA
+と他のプログラム（Claude Code
+エージェントなど）の同居が原因</strong>である可能性が高いと分かりました。
+反復回数を 20,000 → 200,000 に増やしても RAM はほぼ変わりません（SA
+は反復ごとにデータを溜め込まない設計だと確認できた）。 今後は「100,000
+世帯以上の SA
+を回すときは他の重い処理を同時に走らせない」というルールを設けます（Issue
+#52）。</p>
+<hr />
+<h2 id="目的">目的</h2>
+<ul>
+<li>開発者と PM が「この規模ならどれくらい RAM
+を食うか」を<strong>実測値</strong>で見積もれるようにする</li>
+<li>Issue #52（重実験中の並列 Agent
+禁止ルール）に<strong>数値根拠</strong>を渡す</li>
+<li>Issue #53（trace.jsonl / resume / HTML
+監査）に「どこが膨らむか」の手がかりを渡す</li>
+</ul>
+<h2 id="仮説">仮説</h2>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>仮説</th>
+<th>結果</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1k 世帯 × 200k iter のピーク RSS は 500MB 未満</td>
+<td>✅ 85MB</td>
+</tr>
+<tr>
+<td>HTML レポートは N に比例して急増する</td>
+<td>⚠️ 単独プロセスでは比例するが、最大でも 179MB（100k
+世帯）。仮説より小さい</td>
+</tr>
+<tr>
+<td>trace.jsonl は反復数に比例して増える（in-memory）</td>
+<td>❌ <strong>iter を 10 倍にしても RSS 不変</strong>。streaming
+実装になっており蓄積していない</td>
+</tr>
+<tr>
+<td>100k × 200k × HTML は OOM する</td>
+<td>未測定（後述）。100k × 20k では OOM せず 358MB</td>
+</tr>
+</tbody>
+</table>
+<h2 id="条件">条件</h2>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>項目</th>
+<th>値</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>データ</td>
+<td><code>data/sample_case/</code>
+を整数倍スケール（<code>make_inputs.py</code>）</td>
+</tr>
+<tr>
+<td>世帯数</td>
+<td>{1,000, 10,000, 100,000}</td>
+</tr>
+<tr>
+<td>反復数</td>
+<td>{20,000, 200,000}</td>
+</tr>
+<tr>
+<td>モード</td>
+<td>dry-run（書き込みなし）/ full（CSV+trace.jsonl 書き出し）/
+full+html（さらに HTML レポート生成）</td>
+</tr>
+<tr>
+<td>seed</td>
+<td>{1, 2, 3}（一部セルのみ seed×3、それ以外は seed=1）</td>
+</tr>
+<tr>
+<td>計測方法</td>
+<td>子プロセスを <code>synthpop-jp generate</code>
+として起動し、<code>ps -o rss=</code> で 100ms 間隔サンプリング</td>
+</tr>
+<tr>
+<td>OOM ガード</td>
+<td>物理メモリの 70%（18GB）を超えたら SIGTERM/SIGKILL</td>
+</tr>
+<tr>
+<td>実行環境</td>
+<td>macOS Darwin 24.6.0 / Python 3.12.12 / 物理 RAM 25.8GB</td>
+</tr>
+</tbody>
+</table>
+<h2 id="使用データ">使用データ</h2>
+<ul>
+<li>名前: scaled sample_case</li>
+<li>バージョン: <code>data/sample_case/</code> の整数倍スケール（100,
+1000 倍）</li>
+<li>取得方法: <code>make_inputs.py</code> が tempdir 内に動的生成</li>
+<li>前処理: <code>count</code> 列を整数倍、<code>rate</code>
+列はそのまま</li>
+<li>詳細: <code>INPUT.md</code></li>
+</ul>
+<h2 id="評価指標">評価指標</h2>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>指標</th>
+<th>定義</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>sa_peak_rss_bytes</td>
+<td>SA 子プロセスの RSS 最大値（<code>ps</code> サンプリング）</td>
+</tr>
+<tr>
+<td>sa_elapsed_seconds</td>
+<td>SA 子プロセスの実時間（spawn → exit）</td>
+</tr>
+<tr>
+<td>html_peak_rss_bytes</td>
+<td>HTML 生成子プロセスの RSS 最大値（full+html 時のみ）</td>
+</tr>
+</tbody>
+</table>
+<h2 id="結果">結果</h2>
+<h3 id="数値サマリn-別modefullseed1">数値サマリ（N
+別、mode=full、seed=1）</h3>
+<table>
+<thead>
+<tr>
+<th>N</th>
+<th>SA peak</th>
+<th>SA elapsed</th>
+<th>HTML peak (full+html)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1,000</td>
+<td>86MB</td>
+<td>0.7s</td>
+<td>64MB</td>
+</tr>
+<tr>
+<td>10,000</td>
+<td>106MB</td>
+<td>3.0s</td>
+<td>63MB</td>
+</tr>
+<tr>
+<td>100,000</td>
+<td>358MB</td>
+<td>177s</td>
+<td>179MB</td>
+</tr>
+</tbody>
+</table>
+<h3 id="iter-軸の効果modefullseed1">iter
+軸の効果（mode=full、seed=1）</h3>
+<table>
+<thead>
+<tr>
+<th>N</th>
+<th>20k iter</th>
+<th>200k iter</th>
+<th>差</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1,000</td>
+<td>86MB</td>
+<td>85MB</td>
+<td>-1%</td>
+</tr>
+<tr>
+<td>10,000</td>
+<td>106MB</td>
+<td>108MB</td>
+<td>+2%</td>
+</tr>
+</tbody>
+</table>
+<p>→ <strong>反復回数は RSS にほぼ影響しない</strong>。SA state
+は固定サイズで、trace は streaming されている。</p>
+<h3 id="seed-間ばらつきmodefullmax_iters20k">seed
+間ばらつき（mode=full、max_iters=20k）</h3>
+<table>
+<thead>
+<tr>
+<th>N</th>
+<th>seed=1</th>
+<th>seed=2</th>
+<th>seed=3</th>
+<th>最大ばらつき</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1,000</td>
+<td>86MB</td>
+<td>84MB</td>
+<td>84MB</td>
+<td>2.4%</td>
+</tr>
+<tr>
+<td>10,000</td>
+<td>106MB</td>
+<td>96MB</td>
+<td>108MB</td>
+<td>11.6%</td>
+</tr>
+<tr>
+<td>100,000</td>
+<td>358MB</td>
+<td>357MB</td>
+<td>356MB</td>
+<td>0.6%</td>
+</tr>
+</tbody>
+</table>
+<h3 id="モード別寄与n100kmax_iters20kseed1">モード別寄与（N=100k、max_iters=20k、seed=1）</h3>
+<table>
+<thead>
+<tr>
+<th>mode</th>
+<th>SA peak</th>
+<th>HTML peak</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>dry-run</td>
+<td>358MB</td>
+<td>-</td>
+</tr>
+<tr>
+<td>full</td>
+<td>358MB</td>
+<td>-</td>
+</tr>
+<tr>
+<td>full+html</td>
+<td>347MB</td>
+<td>179MB</td>
+</tr>
+</tbody>
+</table>
+<p>→ <strong>dry-run と full の差は誤差範囲</strong>。CSV 書き出しと
+trace.jsonl は RSS にほぼ影響しない（streaming 実装の確認）。 →
+<strong>HTML 生成は別プロセス</strong>で、SA と独立に最大 179MB（100k
+世帯）。</p>
+<h3 id="全データ">全データ</h3>
+<p><code>outputs/peak_rss.csv</code> 参照（21 行、5 ラウンド分）。</p>
+<h2 id="解釈">解釈</h2>
+<h3 id="主結論">主結論</h3>
+<p><strong>SA 単独では PC を固める規模に達しない</strong>。100k
+世帯（人口約 270k）でも 358MB であり、25.8GB の物理 RAM の 1.4%
+に過ぎない。 前回 PC が固まった原因は、SA
+単独ではなく、<strong>並列稼働する他プロセス（Claude Code
+エージェント、複数の SA 実験、ブラウザ等）との合算</strong>で物理 RAM
+が枯渇したと考えられる。</p>
+<h3 id="trace.jsonl-は-streaming-済み">trace.jsonl は streaming
+済み</h3>
+<p>dry-run と full の RSS が誤差範囲内で一致した（358MB vs
+358MB）。これは <code>trace.jsonl</code>
+を反復ごとに追記書き出ししており、in-memory
+バッファに溜め込んでいないことを示す。 反復数を 20k → 200k に 10
+倍にしても RSS が変わらない事実とも整合する。<strong>Issue #53 の
+<code>trace.jsonl</code> 監査は早期 close
+候補</strong>（追加コード読解で確認すれば、リーク無しと判定して終わる見込み）。</p>
+<h3 id="html-レポートは線形寄与">HTML レポートは線形寄与</h3>
+<p>HTML peak は N に対しおおよそ線形に増える（1k=64MB → 10k=63MB →
+100k=179MB）。10k で 1k と変わらないのは plotly
+のベースランタイムが支配的だから。100k では人口 270k 行の DataFrame と
+plotly 図が支配する。</p>
+<h3 id="時間スケーリング">時間スケーリング</h3>
+<p>SA elapsed は N に対して非線形（1k=0.7s → 10k=3s → 100k=177s）。10x N
+で elapsed は ~5x → ~60x という挙動は、<strong>SA 内部ループに O(N)
+の評価コスト</strong>があることを示唆する（候補近傍の生成・差分評価）。これはメモリではなく速度の話なので
+Issue #51 のスコープ外だが、実用面で 100k × 200k は 30
+分超かかる見込み。</p>
+<h3 id="pm-が読むべき含意重実験の境界">PM
+が読むべき含意（重実験の境界）</h3>
+<p>このマシン（物理 RAM 25.8GB）における目安:</p>
+<table>
+<thead>
+<tr>
+<th>規模</th>
+<th>SA peak</th>
+<th>並列許容（1.5GB Claude × N agents の場合）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>≤ 10k 世帯</td>
+<td>≤ 110MB</td>
+<td>同居 OK（5+ Agents まで余裕）</td>
+</tr>
+<tr>
+<td>100k 世帯</td>
+<td>358MB</td>
+<td>同居 OK（3-4 Agents まで）</td>
+</tr>
+<tr>
+<td>推定 1M 世帯</td>
+<td>≈ 3.5GB（外挿）</td>
+<td>軽い Agent 1 つまで</td>
+</tr>
+<tr>
+<td>推定 10M 世帯</td>
+<td>≈ 35GB（外挿）</td>
+<td><strong>単独実行必須</strong>、OOM ガード必須</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Issue #52 では「100k 世帯以上の SA は heavy 扱いとし、他の
+Agent 起動を控える」を暫定しきい値</strong>として推奨する。10M
+規模に達する実験は本リポジトリでは Phase 4-5
+まで想定されておらず、当面の運用は 100k 基準で十分。</p>
+<h2 id="制約">制約</h2>
+<ul>
+<li><strong>物理 RAM 25.8GB の単一マシンでの計測</strong>。RAM 16GB
+機での挙動は別途要検証</li>
+<li><strong>macOS の RSS 計測</strong> (<code>ps -o rss=</code>) は
+shared memory を含む。Linux と比較すると数値が膨らむ可能性</li>
+<li><strong>100k × 200k は時間制約で測定省略</strong>（推定 12 分）。RSS
+は iter 軸が flat であることから 100k × 20k と同等と推測</li>
+<li><strong>seed×3 検証は full モード × 20k iter
+のみ</strong>。他のモード/iter ではばらつき未確認</li>
+<li><strong>OOM 到達セルなし</strong>（OOM
+ガードの動作確認は単体テストで実施済み）</li>
+<li><strong>HTML
+レポート生成は別プロセスで計測</strong>。実運用で「generate
+直後に同プロセスで render」するパターンの結合測定はしていない（合算 ≈ SA
+peak + HTML peak とみなせる）</li>
+</ul>
+<h2 id="再現手順">再現手順</h2>
+<div class="sourceCode" id="cb1"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># 全グリッド実行（推定 30 分弱、100k 系の elapsed が支配）</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="ex">uv</span> run python experiments/2026-04-29-sa-memory-profile/run.py</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="co"># smoke（1 セルのみ、~1 秒）</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="ex">uv</span> run python experiments/2026-04-29-sa-memory-profile/run.py <span class="at">--smoke</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="co"># 部分指定の例（10k × 20k × full × seed=1,2,3）</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="ex">uv</span> run python experiments/2026-04-29-sa-memory-profile/run.py <span class="dt">\</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">--n-households</span> 10000 <span class="at">--max-iters</span> 20000 <span class="at">--modes</span> full <span class="at">--seeds</span> 1 2 3</span></code></pre></div>
+<ul>
+<li>Python: 3.12.12</li>
+<li>主要依存: pandas, pyyaml, synthpop-jp（編集可能インストール）</li>
+<li>実行時間目安: pilot 21 セル ≈ 12 分（100k 系の 9 セルが大半）</li>
+</ul>
+<h2 id="次に見るべき論点">次に見るべき論点</h2>
+<ul>
+<li><label><input type="checkbox"></input><strong>Issue #52</strong>:
+本実験の数値を運用ルールに反映（100k
+しきい値、<code>WEIGHT.md=heavy</code> の運用）</label></li>
+<li><label><input type="checkbox"></input><strong>Issue #53</strong>:
+trace.jsonl 監査は early-close 候補。resume と HTML inline figure
+のコード読解にスコープを絞り込んでよい</label></li>
+<li><label><input type="checkbox"></input>100k × 200k
+の補測（時間予算が空けば）</label></li>
+<li><label><input type="checkbox"></input><strong>CPU/メモリプロファイル</strong>で 100k の
+elapsed が 177s かかる原因を特定（O(N) 候補生成かどうか）。Issue #51
+のスコープ外、別 Issue で起票要否を判断</label></li>
+<li><label><input type="checkbox"></input>1M 規模での外挿確認（Phase 3+
+で需要があれば）</label></li>
+<li>関連: #33（SA
+性能ゲート）、#31（trace.jsonl）、#32（resume）、#38（HTML）</li>
+</ul>
+<hr />
+<h2 id="追記時系列">追記（時系列）</h2>
+<!-- 結果を書き換えないこと。新しい知見は日付付きでここに追記する。 -->
+<p>（なし）</p>
+</body>
+</html>
