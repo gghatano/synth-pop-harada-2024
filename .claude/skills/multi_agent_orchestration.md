@@ -117,6 +117,20 @@ Phase が進むにつれて 1 Phase 内で 3〜6 Issue を並列に回す必要�
 - Issue B の plan / impl で Issue A の API を前提にしている
 - 同一モジュール（`cli.py`, `config.py` など）を両方が変更する可能性がある
 
+### 重実験 worktree が active な間は新規 Agent を起動しない
+
+Issue #51 の実測（2026-04-29）で、SA 単独は 100k 世帯でも 358MB であり物理 RAM を圧迫しないと判明した。
+PC が固まる事故は **「重実験 + 並列 Agent + ブラウザ等」の合算**で物理 RAM が枯渇したときに起きる。
+本節は再発防止の運用ルール:
+
+- worktree 内に `experiments/*/WEIGHT.md` で `heavy` を宣言した実験ディレクトリがある場合、その worktree は「重実験 worktree」
+- **重実験 worktree が 1 本でも active な間、新規 Agent の起動を控える**
+- `make pm` の出力で確認できる（worktree 行に `⚠ heavy`）
+- 暫定しきい値: **N ≥ 100k 世帯の SA を含む実験は heavy**（Issue #51 実測値による）。
+  実験ディレクトリに `WEIGHT.md` を置くこと（`light` または `heavy` を 1 行）
+
+実装は Issue #52。詳細は [`docs/rules/experiment-management.md`](../../docs/rules/experiment-management.md) §4 の「重さタグ（WEIGHT.md）」を参照。
+
 ### 例: Phase 1 の実行順序
 
 ```
