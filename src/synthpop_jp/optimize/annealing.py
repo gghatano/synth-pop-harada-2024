@@ -28,9 +28,10 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from synthpop_jp.optimize.transitions import TransitionError
+from synthpop_jp.optimize.transitions import AgeSwapTransition, TransitionError
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from pathlib import Path
 
     from rich.progress import Progress, TaskID
@@ -152,6 +153,39 @@ class _RichProgressCtx:
 # ---------------------------------------------------------------------------
 
 
+def _propose_with_apply_callback(
+    transition: AgeChangeTransition | AgeSwapTransition,
+    objective: ObjectiveState,
+) -> tuple[float, Callable[[], None]]:
+    """Run ``transition.propose()`` and return ``(delta, apply_callback)``.
+
+    Issue #57: AgeSwapTransition と AgeChangeTransition で propose の戻り値型と
+    objective に呼ぶメソッドが異なるため、SA loop 側を 1 経路に保つために本関数で
+    分岐を吸収する。``apply_callback`` を呼ぶと変更が atomic に内部状態へ反映される。
+
+    Raises
+    ------
+    TransitionError
+        transition.propose がハード制約違反で諦めた場合。
+    """
+    if isinstance(transition, AgeSwapTransition):
+        (idx_a, age_a_new), (idx_b, age_b_new) = transition.propose()
+        delta = objective.propose_swap(idx_a, age_a_new, idx_b, age_b_new)
+
+        def apply_swap() -> None:
+            objective.apply_swap(idx_a, age_a_new, idx_b, age_b_new)
+
+        return delta, apply_swap
+
+    person_idx, new_age = transition.propose()
+    delta = objective.propose_change(person_idx, new_age)
+
+    def apply_change() -> None:
+        objective.apply_change(person_idx, new_age)
+
+    return delta, apply_change
+
+
 def metropolis_accept(
     *,
     delta: float,
@@ -270,7 +304,7 @@ class SARunner:
         *,
         arrays: PopulationArrays,
         objective: ObjectiveState,
-        transition: AgeChangeTransition,
+        transition: AgeChangeTransition | AgeSwapTransition,
         cooling: CoolingSchedule,
         config: AnnealingConfig,
         trace_path: Path | None = None,
@@ -413,17 +447,17 @@ class SARunner:
                     temperature = cooling.get_temperature(iter_n)
 
                     # 遷移提案（ハード制約違反で TransitionError が起きたらスキップ）
+                    # isinstance で型ガードし、delta + apply_callback を 1 経路で組み立てる
                     try:
-                        person_idx, new_age = transition.propose()
+                        delta, apply_callback = _propose_with_apply_callback(
+                            transition, objective
+                        )
                     except TransitionError:
                         iter_n += 1
                         state.iter = iter_n
                         state.n_total += 1
                         patience_counter += 1
                         continue
-
-                    # 差分スコア計算
-                    delta = objective.propose_change(person_idx, new_age)
 
                     # Metropolis 受理判定
                     accepted = metropolis_accept(
@@ -433,8 +467,7 @@ class SARunner:
                     state.n_total += 1
 
                     if accepted:
-                        # 遷移を受理
-                        objective.apply_change(person_idx, new_age)
+                        apply_callback()
                         state.n_accepted += 1
                         state.current_score = float(objective.total_score)
                         recent_accepted += 1

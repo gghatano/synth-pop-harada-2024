@@ -335,7 +335,7 @@ def generate(
     from synthpop_jp.optimize.annealing import SARunner
     from synthpop_jp.optimize.cooling import ExponentialCooling
     from synthpop_jp.optimize.objective import ObjectiveState
-    from synthpop_jp.optimize.transitions import AgeChangeTransition
+    from synthpop_jp.optimize.transitions import AgeChangeTransition, AgeSwapTransition
     from synthpop_jp.rng import SeedRegistry
 
     logging.basicConfig(level=getattr(logging, log_level.value))
@@ -452,12 +452,21 @@ def generate(
         f"evals_per_agent={annealing_cfg.evals_per_agent})"
     )
 
-    transition = AgeChangeTransition(
-        arrays=arrays,
-        demo_by_age_sex=demographic_by_age_sex,
-        rng=seed_reg.rng("sa_transition"),
-        demo_ft_role=demographic_by_family_type_role,
-    )
+    transition: AgeChangeTransition | AgeSwapTransition
+    if annealing_cfg.transition_kind == "age-swap":
+        transition = AgeSwapTransition(
+            arrays=arrays,
+            demo_by_age_sex=demographic_by_age_sex,
+            rng=seed_reg.rng("sa_transition"),
+            demo_ft_role=demographic_by_family_type_role,
+        )
+    else:
+        transition = AgeChangeTransition(
+            arrays=arrays,
+            demo_by_age_sex=demographic_by_age_sex,
+            rng=seed_reg.rng("sa_transition"),
+            demo_ft_role=demographic_by_family_type_role,
+        )
     cooling = ExponentialCooling(T0=annealing_cfg.T0, alpha=annealing_cfg.alpha)
     runner_sa = SARunner(rng=seed_reg.rng("sa_runner"))
 

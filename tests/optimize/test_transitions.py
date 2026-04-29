@@ -769,10 +769,9 @@ class TestAgeSwapHardConstraints:
 
         # この世帯では father (M) と child (M) のペアしか同 sex 候補がないが
         # swap すると父 18 / 子 40 で 22 < 14 を満たすが、子 40 は role=child の上限を超える
-        # → このペアは制約違反のため、TransitionError が期待される
+        # → 唯一可能なペアが制約違反のため、propose() は TransitionError を raise する
         with pytest.raises(TransitionError):
-            for _ in range(50):
-                transition.propose()
+            transition.propose()
 
 
 class TestAgeSwapEmptyPool:

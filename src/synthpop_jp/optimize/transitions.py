@@ -5,8 +5,8 @@
 提供するもの:
 - ``AgeChangeTransition``: §12.2A. 1 人の age を変更する遷移。
   ``propose() -> (person_idx, new_age)``
-- ``AgeSwapTransition``: §12.2B. 同 family_type 同 sex の 2 人の age を交換する遷移（Phase 3a, Issue #57）。
-  ``propose() -> ((idx_a, new_age_a), (idx_b, new_age_b))``
+- ``AgeSwapTransition``: §12.2B. 同 family_type 同 sex の 2 人の age を交換する遷移
+  （Phase 3a, Issue #57）。``propose() -> ((idx_a, new_age_a), (idx_b, new_age_b))``
 
 ハード制約一覧（両遷移で共通）
 ------------------------------
@@ -454,10 +454,13 @@ class AgeSwapTransition:
     def __init__(
         self,
         arrays: PopulationArrays,
-        demo_by_age_sex: list[DemographicByAgeSexRow],  # noqa: ARG002 — API 互換
+        demo_by_age_sex: list[DemographicByAgeSexRow],
         rng: np.random.Generator,
-        demo_ft_role: list[DemographicByFamilyTypeRoleRow] | None = None,  # noqa: ARG002
+        demo_ft_role: list[DemographicByFamilyTypeRoleRow] | None = None,
     ) -> None:
+        # demo_by_age_sex / demo_ft_role は AgeChangeTransition と signature を揃えるため
+        # 受け取るが、age-swap では年齢分布からの抽選を行わないので使用しない。
+        del demo_by_age_sex, demo_ft_role
         self._arrays = arrays
         self._rng = rng
 

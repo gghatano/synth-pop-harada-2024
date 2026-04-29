@@ -527,9 +527,9 @@ class TestProposeSwap:
         idx_a, idx_b = 0, 1
         age_a = int(objective.arrays.age[idx_a])
         age_b = int(objective.arrays.age[idx_b])
-        # 同年齢ならテストの意味が薄いので別の age を組む
+        # 同年齢ならテストの意味が薄いので skip
         if age_a == age_b:
-            return  # noqa: PLR0911 — fixture 由来の偶発的な同値はスキップ
+            pytest.skip("fixture 由来の偶発的な同年齢でテストをスキップ")
 
         before = objective.total_score
         delta_proposed = objective.propose_swap(idx_a, age_b, idx_b, age_a)
@@ -551,28 +551,22 @@ class TestApplySwap:
         assert int(objective.arrays.age[idx_b]) == old_a
 
     def test_apply_swap_equivalent_to_sequential_apply(
-        self, objective: ObjectiveState, sample_arrays: PopulationArrays, objective_input
+        self,
+        objective: ObjectiveState,
+        sample_arrays: PopulationArrays,
+        objective_input: ObjectiveInput,
     ) -> None:
         """apply_swap の最終 score は apply_change(A)+apply_change(B) と一致."""
-        # 別 ObjectiveState を平行で作成
-        obj2 = ObjectiveState.from_arrays(
-            arrays=PopulationArrays(
-                age=sample_arrays.age.copy(),
-                sex=sample_arrays.sex.copy(),
-                role=sample_arrays.role.copy(),
-                household_id=sample_arrays.household_id.copy(),
-                family_type=sample_arrays.family_type.copy(),
-                _family_reg=sample_arrays._family_reg,
-                _role_reg=sample_arrays._role_reg,
-                _sex_reg=sample_arrays._sex_reg,
-            ),
-            **objective_input,
-        )
+        import copy as _copy
+
+        # 並行用に別の ObjectiveState を deep-copy で作成
+        arrays2 = _copy.deepcopy(sample_arrays)
+        obj2 = ObjectiveState.from_arrays(arrays=arrays2, **objective_input)
         idx_a, idx_b = 0, 1
         old_a = int(objective.arrays.age[idx_a])
         old_b = int(objective.arrays.age[idx_b])
         if old_a == old_b:
-            return
+            pytest.skip("fixture 由来の偶発的な同年齢でテストをスキップ")
 
         objective.apply_swap(idx_a, old_b, idx_b, old_a)
         # obj2: 順次適用
