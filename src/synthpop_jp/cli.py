@@ -731,6 +731,13 @@ def evaluate(
         **rare_cell_evaluator.evaluate(arrays),
     }
 
+    # entry_points プラグイン (Issue #79). 第三者が `synthpop_jp.evaluators`
+    # group で登録した evaluator を自動検出して呼ぶ。
+    from synthpop_jp.evaluate.plugin import load_evaluator_plugins
+
+    for plugin in load_evaluator_plugins():
+        metrics.update(plugin.evaluate(arrays))
+
     if real_persons_csv is not None:
         if not real_persons_csv.exists():
             err_console.print(

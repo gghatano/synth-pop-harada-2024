@@ -156,6 +156,35 @@ class TestEvaluateIntegration:
         assert eval_result.exit_code == 1
         assert "real-persons-csv" in eval_result.output
 
+    def test_evaluate_calls_entry_point_plugins(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """entry_points 登録された plugin の metric が metrics.json に追記される (Issue #79)."""
+
+        from synthpop_jp.optimize.state import PopulationArrays
+
+        class _DummyPlugin:
+            name: str = "plugin_dummy"
+
+            def evaluate(self, pop: PopulationArrays) -> dict[str, float]:
+                return {"plugin_dummy.score": float(pop.n_persons)}
+
+        monkeypatch.setattr(
+            "synthpop_jp.evaluate.plugin.load_evaluator_plugins",
+            lambda: [_DummyPlugin()],
+        )
+
+        config_path = _make_config_yaml(tmp_path)
+        gen_result = runner.invoke(app, ["generate", "--config", str(config_path)])
+        assert gen_result.exit_code == 0, gen_result.output
+        eval_result = runner.invoke(app, ["evaluate", "--config", str(config_path)])
+        assert eval_result.exit_code == 0, eval_result.output
+
+        metrics = json.loads((tmp_path / "out" / "metrics.json").read_text(encoding="utf-8"))
+        assert "plugin_dummy.score" in metrics
+        assert "aggregate.l1.total" in metrics
+        assert "rare_cell.total_cells" in metrics
+
     def test_evaluate_appends_pyramid_per_family_type_keys(self, tmp_path: Path) -> None:
         """use_family_type_pyramid=True の config で evaluate が
         ``aggregate.l1.pyramid_per_family_type.<ft>.<sex>`` キーを出力する (Issue #71)."""
