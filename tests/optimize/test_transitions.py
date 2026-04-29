@@ -23,7 +23,9 @@ from synthpop_jp.optimize.state import PopulationArrays
 from synthpop_jp.optimize.transitions import (
     AgeChangeTransition,
     AgeSwapTransition,
+    ConstantPChange,
     HybridTransition,
+    LinearPChange,
     TransitionError,
     build_role_age_dist,
 )
@@ -899,3 +901,80 @@ class TestHybridTransitionInvalidProbability:
             HybridTransition(change=change, swap=swap, p_change=1.5, rng=rng)
         with pytest.raises(ValueError):
             HybridTransition(change=change, swap=swap, p_change=-0.1, rng=rng)
+
+
+# ---------------------------------------------------------------------------
+# PChangeSchedule (Issue #69) — 動的 p_change スケジュール
+# ---------------------------------------------------------------------------
+
+
+class TestConstantPChange:
+    """ConstantPChange は iter/total に依らず固定値を返す."""
+
+    def test_constant_returns_p_for_any_iter(self) -> None:
+        sched = ConstantPChange(0.7)
+        for it in [0, 50, 100, 1000]:
+            assert sched.p_change_at(it, 100) == 0.7
+
+
+class TestLinearPChange:
+    """LinearPChange は iter / total の進行率に従って線形補間する."""
+
+    def test_start_at_iter_zero(self) -> None:
+        sched = LinearPChange(start=0.9, end=0.3)
+        assert abs(sched.p_change_at(0, 100) - 0.9) < 1e-9
+
+    def test_end_at_iter_total(self) -> None:
+        sched = LinearPChange(start=0.9, end=0.3)
+        assert abs(sched.p_change_at(100, 100) - 0.3) < 1e-9
+
+    def test_midpoint_linear_interpolation(self) -> None:
+        sched = LinearPChange(start=0.9, end=0.3)
+        # 50% 進行で (0.9 + 0.3) / 2 = 0.6
+        assert abs(sched.p_change_at(50, 100) - 0.6) < 1e-9
+
+    def test_iter_exceeding_total_clamps_to_end(self) -> None:
+        sched = LinearPChange(start=0.9, end=0.3)
+        assert abs(sched.p_change_at(200, 100) - 0.3) < 1e-9
+
+    def test_total_zero_returns_start(self) -> None:
+        """total=0 のとき進行率を計算できないので start を返す."""
+        sched = LinearPChange(start=0.9, end=0.3)
+        assert abs(sched.p_change_at(0, 0) - 0.9) < 1e-9
+
+
+class TestHybridTransitionWithSchedule:
+    """HybridTransition が schedule オブジェクトを受け取って set_progress に応じた選択を行う."""
+
+    def test_accepts_schedule_object(self) -> None:
+        """schedule オブジェクトを p_change として受理できる."""
+        change, swap = _build_hybrid_pair()
+        rng = SeedRegistry(root=42).rng("sa_hybrid_chooser")
+        sched = ConstantPChange(0.7)
+        # ValueError 等を出さずに構築できれば OK
+        HybridTransition(change=change, swap=swap, p_change=sched, rng=rng)
+
+    def test_float_is_wrapped_to_constant(self) -> None:
+        """float を渡すと ConstantPChange に wrap され、既存挙動と一致."""
+        change, swap = _build_hybrid_pair()
+        rng = SeedRegistry(root=42).rng("sa_hybrid_chooser")
+        hybrid = HybridTransition(change=change, swap=swap, p_change=1.0, rng=rng)
+        # set_progress を呼ばなくても constant=1.0 で常に change が返る
+        for _ in range(20):
+            assert hybrid.choose() is change
+
+    def test_set_progress_drives_linear_schedule(self) -> None:
+        """linear schedule で set_progress(iter, total) に従って choose 確率が変わる."""
+        # start=1.0, end=0.0 にすれば iter=0 で必ず change、iter=total で必ず swap
+        change, swap = _build_hybrid_pair()
+        rng = SeedRegistry(root=42).rng("sa_hybrid_chooser")
+        sched = LinearPChange(start=1.0, end=0.0)
+        hybrid = HybridTransition(change=change, swap=swap, p_change=sched, rng=rng)
+
+        hybrid.set_progress(0, 100)
+        for _ in range(20):
+            assert hybrid.choose() is change
+
+        hybrid.set_progress(100, 100)
+        for _ in range(20):
+            assert hybrid.choose() is swap

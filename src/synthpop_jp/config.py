@@ -68,11 +68,19 @@ class AnnealingConfig(BaseModel):
         ``"hybrid"`` は §12.2C（Issue #67、p_change/p_swap で混合）。
         デフォルト ``"age-change"``。
     p_change : float
-        ``transition_kind == "hybrid"`` で AgeChange を選ぶ確率。
-        デフォルト 0.7。``p_change + p_swap == 1.0`` が必要。
+        hybrid 時に AgeChange を選ぶ確率（schedule が constant のとき）または
+        linear schedule の **始端**。デフォルト 0.7。
     p_swap : float
-        ``transition_kind == "hybrid"`` で AgeSwap を選ぶ確率。
-        デフォルト 0.3。
+        constant schedule で AgeSwap を選ぶ確率。デフォルト 0.3。
+        constant 時のみ ``p_change + p_swap == 1.0`` が要求される。
+    p_change_schedule : Literal["constant", "linear"]
+        hybrid の p_change を反復進行に応じてどう変えるか（Issue #69）。
+        ``"constant"`` は ``p_change`` を常に使う（既存挙動）。
+        ``"linear"`` は ``p_change`` から ``p_change_end`` まで線形補間する。
+        デフォルト ``"constant"``。
+    p_change_end : float | None
+        ``p_change_schedule == "linear"`` で終端の p_change を指定する。
+        linear のときは必須。constant では無視。
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -90,6 +98,8 @@ class AnnealingConfig(BaseModel):
     transition_kind: Literal["age-change", "age-swap", "hybrid"] = "age-change"
     p_change: float = 0.7
     p_swap: float = 0.3
+    p_change_schedule: Literal["constant", "linear"] = "constant"
+    p_change_end: float | None = None
 
     @field_validator("T0")
     @classmethod
@@ -111,25 +121,43 @@ class AnnealingConfig(BaseModel):
 
     @model_validator(mode="after")
     def validate_hybrid_probabilities(self) -> AnnealingConfig:
-        """``transition_kind == "hybrid"`` のとき p_change/p_swap を検証する.
+        """``transition_kind == "hybrid"`` のとき p_change 関連を検証する.
 
-        - 両者とも ``[0.0, 1.0]`` の範囲
-        - 和が 1.0 (許容誤差 1e-6)
+        - p_change は ``[0.0, 1.0]`` の範囲（schedule に依らず必須）
+        - constant: ``p_change + p_swap == 1.0`` (許容誤差 1e-6)
+        - linear: ``p_change_end`` が指定され ``[0.0, 1.0]`` の範囲
 
         非 hybrid のときは検証しない（デフォルト値が残っても受理）。
         """
-        if self.transition_kind == "hybrid":
-            if not (0.0 <= self.p_change <= 1.0) or not (0.0 <= self.p_swap <= 1.0):
+        if self.transition_kind != "hybrid":
+            return self
+
+        if not (0.0 <= self.p_change <= 1.0):
+            msg = f"hybrid 遷移では p_change を [0.0, 1.0] にしてください (got {self.p_change})"
+            raise ValueError(msg)
+
+        if self.p_change_schedule == "constant":
+            if not (0.0 <= self.p_swap <= 1.0):
                 msg = (
-                    "hybrid 遷移では p_change と p_swap を [0.0, 1.0] にしてください "
-                    f"(p_change={self.p_change}, p_swap={self.p_swap})"
+                    "constant schedule では p_swap を [0.0, 1.0] にしてください "
+                    f"(p_swap={self.p_swap})"
                 )
                 raise ValueError(msg)
             total = self.p_change + self.p_swap
             if abs(total - 1.0) > 1e-6:
                 msg = (
-                    "hybrid 遷移では p_change + p_swap == 1.0 が必要です "
+                    "constant schedule では p_change + p_swap == 1.0 が必要です "
                     f"(p_change={self.p_change}, p_swap={self.p_swap}, sum={total})"
+                )
+                raise ValueError(msg)
+        elif self.p_change_schedule == "linear":
+            if self.p_change_end is None:
+                msg = "linear schedule では p_change_end の指定が必須です"
+                raise ValueError(msg)
+            if not (0.0 <= self.p_change_end <= 1.0):
+                msg = (
+                    "linear schedule では p_change_end を [0.0, 1.0] にしてください "
+                    f"(p_change_end={self.p_change_end})"
                 )
                 raise ValueError(msg)
         return self

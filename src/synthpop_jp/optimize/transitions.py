@@ -10,6 +10,9 @@
 - ``HybridTransition``: §12.2C. ``AgeChangeTransition`` と ``AgeSwapTransition`` を
   確率 ``p_change`` / ``1 - p_change`` で混合する遷移（Phase 3a, Issue #67）。
   SA loop 側は ``hybrid.choose()`` で内部 transition を取り出し既存ロジックを再利用する。
+- ``ConstantPChange`` / ``LinearPChange``: ``HybridTransition`` の p_change を
+  反復進行に応じて動的に変えるスケジュール（Phase 3a, Issue #69）。
+  SA loop 側は ``hybrid.set_progress(iter, total)`` で進行を渡す。
 
 ハード制約一覧（両遷移で共通）
 ------------------------------
@@ -652,6 +655,62 @@ def _compute_dynamic_constraints(arrays: PopulationArrays) -> tuple[np.ndarray, 
 # ---------------------------------------------------------------------------
 
 
+class ConstantPChange:
+    """``HybridTransition`` 用の固定 p_change スケジュール (Issue #69).
+
+    SA 反復に依らず常に同じ ``p`` を返す。``HybridTransition`` の constructor で
+    float が渡されたとき自動で本クラスに wrap される（後方互換性）。
+    """
+
+    def __init__(self, p: float) -> None:
+        if not (0.0 <= p <= 1.0):
+            msg = f"p は [0.0, 1.0] の範囲でなければなりません (got {p})"
+            raise ValueError(msg)
+        self._p = float(p)
+
+    def p_change_at(self, iter: int, total: int) -> float:
+        """SA 反復 ``iter`` / ``total`` のとき p_change を返す（常に固定値）."""
+        del iter, total  # constant schedule では使わない（共通 API 維持のため受ける）
+        return self._p
+
+
+class LinearPChange:
+    """``HybridTransition`` 用の線形補間 p_change スケジュール (Issue #69).
+
+    SA の進行率 ``iter / total`` に応じて ``start`` から ``end`` まで線形に変化する。
+    spec §12.2C 後半（初期 age-change 厚め → 後半 age-swap 厚め）を表現する。
+
+    Parameters
+    ----------
+    start : float
+        ``iter == 0`` での p_change（[0.0, 1.0]）。
+    end : float
+        ``iter >= total`` での p_change（[0.0, 1.0]）。
+
+    Notes
+    -----
+    ``iter > total`` の場合は ``end`` にクランプする（SA が想定より長く回るときの保護）。
+    ``total <= 0`` のときは ``start`` を返す（割り算回避）。
+    """
+
+    def __init__(self, start: float, end: float) -> None:
+        if not (0.0 <= start <= 1.0):
+            msg = f"start は [0.0, 1.0] の範囲でなければなりません (got {start})"
+            raise ValueError(msg)
+        if not (0.0 <= end <= 1.0):
+            msg = f"end は [0.0, 1.0] の範囲でなければなりません (got {end})"
+            raise ValueError(msg)
+        self._start = float(start)
+        self._end = float(end)
+
+    def p_change_at(self, iter: int, total: int) -> float:
+        """進行率 ``min(iter/total, 1.0)`` で start ↔ end を線形補間する."""
+        if total <= 0:
+            return self._start
+        t = min(iter / total, 1.0)
+        return self._start + (self._end - self._start) * t
+
+
 class HybridTransition:
     """``AgeChangeTransition`` と ``AgeSwapTransition`` の確率混合遷移.
 
@@ -666,36 +725,54 @@ class HybridTransition:
         age-change 遷移インスタンス。
     swap : AgeSwapTransition
         age-swap 遷移インスタンス。
-    p_change : float
-        AgeChange を選ぶ確率 (0.0–1.0)。残りが AgeSwap の確率。
+    p_change : float | ConstantPChange | LinearPChange
+        AgeChange を選ぶ確率。``float`` を渡すと ``ConstantPChange`` に wrap される
+        （後方互換）。schedule オブジェクトを渡すと SA の進行に応じて動的に変化する。
     rng : np.random.Generator
         どちらを選ぶかの乱数源（SeedRegistry の独立 stream を渡す）。
 
     Raises
     ------
     ValueError
-        ``p_change`` が ``[0.0, 1.0]`` の範囲外のとき。
+        ``p_change`` が ``float`` のとき ``[0.0, 1.0]`` の範囲外。
 
     Notes
     -----
-    動的スケジュール（反復に応じた p_change 変化）は spec §12.2C で示唆されているが
-    本実装では固定確率のみ。スケジュール対応は後続 Issue で。
+    動的スケジュールを使うときは SA loop が反復ごとに ``set_progress(iter, total)``
+    を呼ぶ前提（Issue #69）。``set_progress`` を呼ばないと初期値（``iter=0, total=1``）で
+    schedule が評価される。固定確率（``ConstantPChange``）は呼ばれなくても影響なし。
     """
 
     def __init__(
         self,
         change: AgeChangeTransition,
         swap: AgeSwapTransition,
-        p_change: float,
+        p_change: float | ConstantPChange | LinearPChange,
         rng: np.random.Generator,
     ) -> None:
-        if not (0.0 <= p_change <= 1.0):
-            msg = f"p_change は [0.0, 1.0] の範囲でなければなりません (got {p_change})"
-            raise ValueError(msg)
+        if isinstance(p_change, (int, float)):
+            self._schedule: ConstantPChange | LinearPChange = ConstantPChange(float(p_change))
+        else:
+            self._schedule = p_change
         self._change = change
         self._swap = swap
-        self._p_change = float(p_change)
         self._rng = rng
+        # 進行状態（set_progress で更新）。schedule が constant なら影響なし。
+        self._iter = 0
+        self._total = 1
+
+    def set_progress(self, iter: int, total: int) -> None:
+        """SA loop が毎反復呼んで進行状態を更新する.
+
+        Parameters
+        ----------
+        iter : int
+            現在の SA 反復インデックス（0-indexed）。
+        total : int
+            停止条件の最大反復数（schedule の終端基準）。
+        """
+        self._iter = int(iter)
+        self._total = int(total)
 
     def choose(self) -> AgeChangeTransition | AgeSwapTransition:
         """乱数で AgeChange / AgeSwap のどちらか 1 つを返す.
@@ -704,7 +781,9 @@ class HybridTransition:
         -------
         AgeChangeTransition | AgeSwapTransition
             各呼び出し時点で確率的に選ばれる内部 transition。
+            schedule が動的なら ``set_progress`` で渡された ``(iter, total)`` を反映する。
         """
-        if self._rng.uniform() < self._p_change:
+        p = self._schedule.p_change_at(self._iter, self._total)
+        if self._rng.uniform() < p:
             return self._change
         return self._swap
