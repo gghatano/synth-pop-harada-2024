@@ -118,15 +118,23 @@ class TestAggregateStatL1Evaluator:
             assert v >= 0.0, f"{k} = {v} should be >= 0"
             assert np.isfinite(v), f"{k} = {v} should be finite"
 
-    def test_total_matches_objective_state_score(
-        self, evaluator: AggregateStatL1Evaluator, sample_arrays: PopulationArrays
-    ) -> None:
+    def test_total_matches_objective_state_score(self, sample_arrays: PopulationArrays) -> None:
         """total は ObjectiveState.total_score と一致する（同 inputs / 同 arrays）."""
+        age_diff_parent_child = load_age_diff_parent_child(_DATA_DIR / "age_diff_parent_child.csv")
+        age_diff_couple = load_age_diff_couple(_DATA_DIR / "age_diff_couple.csv")
+        demographic_by_age_sex = load_demographic_by_age_sex(
+            _DATA_DIR / "demographic_by_age_sex.csv"
+        )
+        evaluator = AggregateStatL1Evaluator(
+            age_diff_parent_child=age_diff_parent_child,
+            age_diff_couple=age_diff_couple,
+            demographic_by_age_sex=demographic_by_age_sex,
+        )
         objective = ObjectiveState.from_arrays(
             arrays=sample_arrays,
-            age_diff_parent_child=evaluator._age_diff_parent_child,
-            age_diff_couple=evaluator._age_diff_couple,
-            demographic_by_age_sex=evaluator._demographic_by_age_sex,
+            age_diff_parent_child=age_diff_parent_child,
+            age_diff_couple=age_diff_couple,
+            demographic_by_age_sex=demographic_by_age_sex,
         )
         result = evaluator.evaluate(sample_arrays)
         assert abs(result["aggregate.l1.total"] - objective.total_score) < 1e-6

@@ -63,7 +63,7 @@ class TestReconstructPopulationArrays:
     def test_multi_household_count(self, tmp_path: Path) -> None:
         """複数世帯を再構築すると人数と世帯数が CSV と一致する."""
         csv_path = tmp_path / "synthetic_persons.csv"
-        rows = []
+        rows: list[dict[str, object]] = []
         person_id = 1
         for hh in range(1, 4):
             for role, sex, age in [("husband", "M", 35), ("wife", "F", 33)]:
