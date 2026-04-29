@@ -436,7 +436,11 @@ def generate(
     )
 
     seed_reg = SeedRegistry(root=settings.seed)
-    arrays = generate_initial_population(stats, seed_reg.rng("init"))
+    arrays = generate_initial_population(
+        stats,
+        seed_reg.rng("init"),
+        use_zero_error_init=settings.objective.use_zero_error_init,
+    )
 
     console.print(f"[green]初期人口生成完了:[/green] {arrays.n_persons} 人")
 
