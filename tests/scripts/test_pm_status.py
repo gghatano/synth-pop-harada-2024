@@ -88,6 +88,39 @@ class TestWorktreeInfoDataclass:
         assert info.pr_number is None
         assert info.pr_state is None
 
+    def test_worktree_info_weight_default_none(self) -> None:
+        """weight field は省略時 None（Issue #52、後方互換）."""
+        pm = _import_pm_status()
+        info = pm.WorktreeInfo(
+            path="/tmp/worktree",
+            branch="feature/x",
+            commits_ahead=0,
+            uncommitted_count=0,
+            last_commit_age=timedelta(minutes=0),
+            plan_comment_exists=False,
+            progress_comment_count=0,
+            pr_number=None,
+            pr_state=None,
+        )
+        assert info.weight is None
+
+    def test_worktree_info_weight_heavy(self) -> None:
+        """weight='heavy' を保持する."""
+        pm = _import_pm_status()
+        info = pm.WorktreeInfo(
+            path="/tmp/worktree",
+            branch="feature/x",
+            commits_ahead=0,
+            uncommitted_count=0,
+            last_commit_age=timedelta(minutes=0),
+            plan_comment_exists=False,
+            progress_comment_count=0,
+            pr_number=None,
+            pr_state=None,
+            weight="heavy",
+        )
+        assert info.weight == "heavy"
+
 
 class TestCollectWorktreeInfo:
     """collect_worktree_info should parse git output into WorktreeInfo."""
@@ -418,7 +451,8 @@ class TestBuildWorktreeTable:
         ]
         table = pm.build_worktree_table(infos, stale_minutes=10)
         assert isinstance(table, Table)
-        assert len(table.columns) == 8
+        # 9 列: 既存 8 + Weight (Issue #52)
+        assert len(table.columns) == 9
 
     def test_table_has_correct_row_count(self) -> None:
         pm = _import_pm_status()
@@ -521,9 +555,94 @@ class TestBuildWorktreeTable:
         rendered = buf.getvalue()
         assert "🟠" in rendered
 
+    def test_table_displays_heavy_marker(self) -> None:
+        """weight='heavy' の worktree は ⚠ 付きで表示される（Issue #52）."""
+        pm = _import_pm_status()
+        from io import StringIO
+
+        from rich.console import Console
+
+        infos = [
+            pm.WorktreeInfo(
+                path="/repo/gitworktree/feature-51",
+                branch="feature/51",
+                commits_ahead=0,
+                uncommitted_count=0,
+                last_commit_age=timedelta(minutes=1),
+                plan_comment_exists=True,
+                progress_comment_count=0,
+                pr_number=None,
+                pr_state=None,
+                weight="heavy",
+            )
+        ]
+        table = pm.build_worktree_table(infos, stale_minutes=10)
+        buf = StringIO()
+        console = Console(file=buf, no_color=True, width=200)
+        console.print(table)
+        rendered = buf.getvalue()
+        assert "⚠" in rendered
+        assert "heavy" in rendered
+
 
 # ---------------------------------------------------------------------------
-# Cycle 6: main function integration, CLI flags
+# Cycle 6: WEIGHT.md detection (Issue #52)
+# ---------------------------------------------------------------------------
+
+
+class TestDetectWeight:
+    """_detect_weight reads experiments/*/WEIGHT.md and returns a weight tier or None."""
+
+    def test_returns_heavy_when_present(self, tmp_path: Path) -> None:
+        pm = _import_pm_status()
+        exp = tmp_path / "experiments" / "2026-04-29-foo"
+        exp.mkdir(parents=True)
+        (exp / "WEIGHT.md").write_text("heavy\n")
+        assert pm._detect_weight(str(tmp_path)) == "heavy"
+
+    def test_returns_light_when_only_light(self, tmp_path: Path) -> None:
+        pm = _import_pm_status()
+        exp = tmp_path / "experiments" / "2026-04-29-foo"
+        exp.mkdir(parents=True)
+        (exp / "WEIGHT.md").write_text("light\n")
+        assert pm._detect_weight(str(tmp_path)) == "light"
+
+    def test_returns_none_when_no_weight_files(self, tmp_path: Path) -> None:
+        pm = _import_pm_status()
+        (tmp_path / "experiments" / "2026-04-29-foo").mkdir(parents=True)
+        # no WEIGHT.md
+        assert pm._detect_weight(str(tmp_path)) is None
+
+    def test_returns_none_when_no_experiments_dir(self, tmp_path: Path) -> None:
+        pm = _import_pm_status()
+        # tmp_path に experiments/ すらない
+        assert pm._detect_weight(str(tmp_path)) is None
+
+    def test_max_rule_returns_heavy_when_mixed(self, tmp_path: Path) -> None:
+        """light + heavy が混在したら heavy を返す（max-rule）."""
+        pm = _import_pm_status()
+        for name, content in [("exp_l", "light"), ("exp_h", "heavy")]:
+            d = tmp_path / "experiments" / name
+            d.mkdir(parents=True)
+            (d / "WEIGHT.md").write_text(content + "\n")
+        assert pm._detect_weight(str(tmp_path)) == "heavy"
+
+    def test_unknown_value_skipped_with_warning(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """light/heavy 以外は warning を出して skip（None を返す）."""
+        pm = _import_pm_status()
+        exp = tmp_path / "experiments" / "exp_bad"
+        exp.mkdir(parents=True)
+        (exp / "WEIGHT.md").write_text("MEDIUM\n")
+        with caplog.at_level("WARNING"):
+            result = pm._detect_weight(str(tmp_path))
+        assert result is None
+        assert any("MEDIUM" in r.message for r in caplog.records)
+
+
+# ---------------------------------------------------------------------------
+# Cycle 7: main function integration, CLI flags
 # ---------------------------------------------------------------------------
 
 
