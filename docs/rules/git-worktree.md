@@ -83,6 +83,29 @@ git worktree prune
 
 ## 3.5. PR merge 時の定型フロー
 
+**通常は `make merge-pr PR=<番号>` 1 コマンドで完結します**（詳細: `scripts/merge_pr.py`）。
+
+```bash
+# リポジトリ直下または worktree 内から実行
+make merge-pr PR=44
+
+# 内容を確認だけしたい場合（コマンドを実際には実行しない）
+make merge-pr PR=44 DRY_RUN=1
+```
+
+`make merge-pr` は以下を自動で実行します:
+
+1. PR の状態確認（state, mergeable, statusCheckRollup）— CI 未通過なら中断
+2. `gh pr ready <PR>` — Draft → Ready に切り替え（Ready 済みなら no-op）
+3. `gh pr merge <PR> --squash --delete-branch` — squash merge
+4. headRefName を取得し worktree path を導出
+5. `git worktree remove gitworktree/feature-N-keyword` — 不在なら warning で続行
+6. `git branch -D feature/N-keyword` — 不在なら warning で続行
+7. `git checkout develop && git pull --ff-only` — develop を最新化
+
+<details>
+<summary>手動で実行する場合（historical reference）</summary>
+
 PR がマージされたら、以下を **この順番で** 実行します（`.claude/skills/4_create_pr.md` §7-8 と整合）。
 
 ```bash
@@ -105,6 +128,8 @@ git checkout develop
 git pull --ff-only
 ```
 
+</details>
+
 ### よくある失敗
 
 | 失敗 | 回避策 |
@@ -113,6 +138,7 @@ git pull --ff-only
 | `cd gitworktree/...` したまま `git worktree remove` して cwd が消失 | 削除前に `cd <repo_root>` で抜ける。`pwd` で確認する習慣 |
 | Draft PR を `gh pr merge` で実行するとエラー | 先に `gh pr ready` を叩く（Draft は自動で Ready にならない） |
 | 片付け忘れた worktree が溜まる | `git worktree list` で定期的に確認。PR merged の worktree は即削除 |
+| `make merge-pr` が CI fail で中断する | CI ログを確認して修正後、再度 push して CI を通す |
 
 ### 並列 PR merge の順序
 
