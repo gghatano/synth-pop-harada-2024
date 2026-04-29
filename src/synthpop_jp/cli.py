@@ -594,6 +594,13 @@ def evaluate(
         Path | None,
         typer.Option("--config", help="設定ファイルのパス。省略時は configs/base.yaml を使う。"),
     ] = None,
+    real_persons_csv: Annotated[
+        Path | None,
+        typer.Option(
+            "--real-persons-csv",
+            help="CAP/TCAP 計算に使う real 個票 CSV。省略時は CAP をスキップ。",
+        ),
+    ] = None,
     log_level: Annotated[
         LogLevel,
         typer.Option("--log-level", help="ログレベル。"),
@@ -606,9 +613,10 @@ def evaluate(
 
     - ``AggregateStatL1Evaluator`` (Issue #59): 統計別 L1 誤差
     - ``RareCellEvaluator`` (Issue #61): family_type×age cell の rare/unique 率
+    - ``CAPEvaluator`` (Issue #65): Generalized CAP / TCAP（``--real-persons-csv`` 指定時のみ）
 
-    結果は ``output_dir/metrics.json`` に ``aggregate.l1.*`` および ``rare_cell.*``
-    キーとして追記される。CAP / DCR 等は後続 Issue で追加。
+    結果は ``output_dir/metrics.json`` に ``aggregate.l1.*`` / ``rare_cell.*`` /
+    ``cap.*`` キーとして追記される。
     """
     import json
     import logging
@@ -617,6 +625,7 @@ def evaluate(
 
     from synthpop_jp.config import Settings
     from synthpop_jp.evaluate.aggregate_metrics import AggregateStatL1Evaluator
+    from synthpop_jp.evaluate.attribute_inference import CAPEvaluator
     from synthpop_jp.evaluate.rare_cell_metrics import RareCellEvaluator
     from synthpop_jp.io.loaders import (
         load_age_diff_couple,
@@ -674,6 +683,19 @@ def evaluate(
         **aggregate_evaluator.evaluate(arrays),
         **rare_cell_evaluator.evaluate(arrays),
     }
+
+    if real_persons_csv is not None:
+        if not real_persons_csv.exists():
+            err_console.print(
+                f"[red]エラー:[/red] --real-persons-csv が見つかりません: {real_persons_csv}"
+            )
+            raise typer.Exit(code=1)
+        console.print(f"[bold]CAP holdout:[/bold] {real_persons_csv}")
+        holdout = reconstruct_population_arrays_from_persons_csv(real_persons_csv)
+        cap_evaluator = CAPEvaluator()
+        metrics.update(cap_evaluator.evaluate(arrays, holdout))
+    else:
+        console.print("[yellow]--real-persons-csv 未指定のため CAP/TCAP はスキップ[/yellow]")
 
     # metrics.json に追記（既存キーは保持）
     metrics_path = settings.output_dir / "metrics.json"
