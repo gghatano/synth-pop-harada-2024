@@ -319,3 +319,28 @@ class TestGenerateHybridTransition:
         assert result.exit_code == 0, result.output
         assert (tmp_path / "out" / "synthetic_persons.csv").exists()
         assert (tmp_path / "out" / "metrics.json").exists()
+
+    def test_hybrid_linear_schedule_runs(self, tmp_path: Path) -> None:
+        """linear schedule の hybrid config で generate が exit 0 で完走する (Issue #69)."""
+        config_data: dict[str, object] = {
+            "seed": 42,
+            "input_dir": str(SAMPLE_CASE_DIR),
+            "output_dir": str(tmp_path / "out"),
+            "annealing": {
+                "T0": 100.0,
+                "alpha": 0.99,
+                "max_iters": 200,
+                "evals_per_agent": 0,
+                "target_threshold": 0.0,
+                "patience": 0,
+                "transition_kind": "hybrid",
+                "p_change_schedule": "linear",
+                "p_change": 0.9,
+                "p_change_end": 0.3,
+            },
+        }
+        config_path = tmp_path / "config_hybrid_linear.yaml"
+        config_path.write_text(yaml.dump(config_data))
+        result = runner.invoke(app, ["generate", "--config", str(config_path)])
+        assert result.exit_code == 0, result.output + str(result.exception or "")
+        assert (tmp_path / "out" / "synthetic_persons.csv").exists()

@@ -408,6 +408,13 @@ class SARunner:
         # 最大反復回数
         max_iters = config.max_iters if config.max_iters > 0 else int(1e18)
 
+        # hybrid schedule の進行基準（Issue #69）。
+        # eval_limit > 0 ならそちらが先に止まることが多いので、終端基準としては
+        # min(max_iters, eval_limit) を採用する（0 は無効値として除外）。
+        schedule_total = max_iters
+        if eval_limit > 0:
+            schedule_total = min(schedule_total, eval_limit)
+
         # trace writer の準備
         use_trace = config.trace_enabled and trace_path is not None
         log_every = config.log_every_n_iters if config.log_every_n_iters > 0 else 1
@@ -455,6 +462,11 @@ class SARunner:
 
                     # 温度取得
                     temperature = cooling.get_temperature(iter_n)
+
+                    # hybrid schedule に進行を渡す（Issue #69）。
+                    # constant schedule なら影響なし、linear のときに p_change を更新する。
+                    if isinstance(transition, HybridTransition):
+                        transition.set_progress(iter_n, schedule_total)
 
                     # 遷移提案（ハード制約違反で TransitionError が起きたらスキップ）
                     # isinstance で型ガードし、delta + apply_callback を 1 経路で組み立てる

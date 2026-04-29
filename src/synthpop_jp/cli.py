@@ -338,7 +338,9 @@ def generate(
     from synthpop_jp.optimize.transitions import (
         AgeChangeTransition,
         AgeSwapTransition,
+        ConstantPChange,
         HybridTransition,
+        LinearPChange,
     )
     from synthpop_jp.rng import SeedRegistry
 
@@ -477,10 +479,20 @@ def generate(
             rng=seed_reg.rng("sa_swap"),
             demo_ft_role=demographic_by_family_type_role,
         )
+        schedule: ConstantPChange | LinearPChange
+        if annealing_cfg.p_change_schedule == "linear":
+            # validator が p_change_end != None を保証している
+            assert annealing_cfg.p_change_end is not None
+            schedule = LinearPChange(
+                start=annealing_cfg.p_change,
+                end=annealing_cfg.p_change_end,
+            )
+        else:
+            schedule = ConstantPChange(annealing_cfg.p_change)
         transition = HybridTransition(
             change=change,
             swap=swap,
-            p_change=annealing_cfg.p_change,
+            p_change=schedule,
             rng=seed_reg.rng("sa_hybrid_chooser"),
         )
     else:

@@ -102,3 +102,54 @@ class TestAnnealingConfigHybrid:
         """age-change で p_change + p_swap != 1.0 でも validator は通る."""
         cfg = AnnealingConfig(transition_kind="age-change", p_change=0.1, p_swap=0.1)
         assert cfg.transition_kind == "age-change"
+
+
+class TestAnnealingConfigHybridSchedule:
+    """hybrid の動的 p_change スケジュール validator (Issue #69)."""
+
+    def test_default_schedule_is_constant(self) -> None:
+        """p_change_schedule の default は constant."""
+        cfg = AnnealingConfig(transition_kind="hybrid")
+        assert cfg.p_change_schedule == "constant"
+        assert cfg.p_change_end is None
+
+    def test_linear_with_p_change_end_is_valid(self) -> None:
+        """linear + p_change_end が指定されていれば valid."""
+        cfg = AnnealingConfig(
+            transition_kind="hybrid",
+            p_change_schedule="linear",
+            p_change=0.9,
+            p_change_end=0.3,
+        )
+        assert cfg.p_change_schedule == "linear"
+        assert cfg.p_change_end == 0.3
+
+    def test_linear_without_p_change_end_rejected(self) -> None:
+        """linear で p_change_end が None なら ValidationError."""
+        with pytest.raises(ValidationError):
+            AnnealingConfig(
+                transition_kind="hybrid",
+                p_change_schedule="linear",
+                p_change=0.9,
+                # p_change_end 省略
+            )
+
+    def test_linear_with_p_change_end_out_of_range_rejected(self) -> None:
+        """p_change_end が [0,1] 外ならば ValidationError."""
+        with pytest.raises(ValidationError):
+            AnnealingConfig(
+                transition_kind="hybrid",
+                p_change_schedule="linear",
+                p_change=0.5,
+                p_change_end=1.5,
+            )
+
+    def test_constant_schedule_uses_existing_validator(self) -> None:
+        """constant スケジュールでは既存の sum=1.0 検証が働く."""
+        with pytest.raises(ValidationError):
+            AnnealingConfig(
+                transition_kind="hybrid",
+                p_change_schedule="constant",
+                p_change=0.5,
+                p_swap=0.6,
+            )
