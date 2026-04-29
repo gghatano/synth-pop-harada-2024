@@ -178,6 +178,38 @@ class TestEvaluateIntegration:
         assert not report_path.exists()
         assert (tmp_path / "out" / "metrics.json").exists()
 
+    def test_evaluate_strict_extended_omits_pyramid_male_female(self, tmp_path: Path) -> None:
+        """strict_extended config (use_family_type_pyramid + exclude_male_female_pyramid)
+        で metrics.json に pyramid_male/pyramid_female キーが含まれない (Issue #76)."""
+        config_data: dict[str, object] = {
+            "seed": 42,
+            "input_dir": str(SAMPLE_CASE_DIR),
+            "output_dir": str(tmp_path / "out"),
+            "annealing": {
+                "T0": 100.0,
+                "alpha": 0.99,
+                "max_iters": 200,
+                "evals_per_agent": 0,
+                "target_threshold": 0.0,
+                "patience": 0,
+            },
+            "objective": {
+                "use_family_type_pyramid": True,
+                "exclude_male_female_pyramid": True,
+            },
+        }
+        config_path = tmp_path / "config_strict.yaml"
+        config_path.write_text(yaml.dump(config_data))
+        gen_result = runner.invoke(app, ["generate", "--config", str(config_path)])
+        assert gen_result.exit_code == 0, gen_result.output
+        eval_result = runner.invoke(app, ["evaluate", "--config", str(config_path)])
+        assert eval_result.exit_code == 0, eval_result.output
+        metrics = json.loads((tmp_path / "out" / "metrics.json").read_text(encoding="utf-8"))
+        assert "aggregate.l1.pyramid_male" not in metrics
+        assert "aggregate.l1.pyramid_female" not in metrics
+        assert "aggregate.l1.father_child_age_diff" in metrics
+        assert any(k.startswith("aggregate.l1.pyramid_per_family_type.") for k in metrics)
+
     def test_evaluate_calls_entry_point_plugins(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:

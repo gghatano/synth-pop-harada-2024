@@ -82,12 +82,14 @@ class AggregateStatL1Evaluator:
         *,
         demo_ft_role: list[DemographicByFamilyTypeRoleRow] | None = None,
         use_family_type_pyramid: bool = False,
+        exclude_male_female_pyramid: bool = False,
     ) -> None:
         self._age_diff_parent_child = age_diff_parent_child
         self._age_diff_couple = age_diff_couple
         self._demographic_by_age_sex = demographic_by_age_sex
         self._demo_ft_role = demo_ft_role
         self._use_family_type_pyramid = use_family_type_pyramid
+        self._exclude_male_female_pyramid = exclude_male_female_pyramid
 
     def evaluate(self, pop: PopulationArrays) -> dict[str, float]:
         """合成人口の統計別 L1 誤差を計算して dict で返す.
@@ -103,6 +105,8 @@ class AggregateStatL1Evaluator:
             minimal 5 統計の ``aggregate.l1.<stat_name>`` + ``aggregate.l1.total``。
             ``use_family_type_pyramid=True`` のときは
             ``aggregate.l1.pyramid_per_family_type.<ft>.<sex>`` も追加。
+            ``exclude_male_female_pyramid=True`` のときは ``pyramid_male`` /
+            ``pyramid_female`` キーを出力しない（Murata 式(3) 準拠、Issue #76）。
         """
         stats = build_objective_stats(
             arrays=pop,
@@ -114,7 +118,12 @@ class AggregateStatL1Evaluator:
         )
         result: dict[str, float] = {}
         total = 0.0
+        # 0: father_child_age_diff, 1: mother_child_age_diff, 2: couple_age_diff
+        # 3: pyramid_male (D), 4: pyramid_female (E)
+        excluded_indices: tuple[int, ...] = (3, 4) if self._exclude_male_female_pyramid else ()
         for i in range(5):
+            if i in excluded_indices:
+                continue
             l1 = stats[i].l1_score()
             result[f"{self.name}.l1.{_STAT_NAMES[i]}"] = l1
             total += l1
