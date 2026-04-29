@@ -378,3 +378,34 @@ class TestGenerateExtendedObjective:
         assert result.exit_code == 0, result.output + str(result.exception or "")
         assert (tmp_path / "out" / "synthetic_persons.csv").exists()
         assert (tmp_path / "out" / "metrics.json").exists()
+
+
+@pytest.mark.slow
+class TestGenerateZeroErrorInit:
+    """zero_error_init モードの CLI 統合テスト (Issue #77)."""
+
+    def test_zero_error_init_runs(self, tmp_path: Path) -> None:
+        """use_zero_error_init=True で generate が exit 0 で完走する."""
+        config_data: dict[str, object] = {
+            "seed": 42,
+            "input_dir": str(SAMPLE_CASE_DIR),
+            "output_dir": str(tmp_path / "out"),
+            "annealing": {
+                "T0": 100.0,
+                "alpha": 0.99,
+                "max_iters": 200,
+                "evals_per_agent": 0,
+                "target_threshold": 0.0,
+                "patience": 0,
+            },
+            "objective": {
+                "use_family_type_pyramid": True,
+                "use_zero_error_init": True,
+            },
+        }
+        config_path = tmp_path / "config_zero_error.yaml"
+        config_path.write_text(yaml.dump(config_data))
+        result = runner.invoke(app, ["generate", "--config", str(config_path)])
+        assert result.exit_code == 0, result.output + str(result.exception or "")
+        assert (tmp_path / "out" / "synthetic_persons.csv").exists()
+        assert (tmp_path / "out" / "metrics.json").exists()

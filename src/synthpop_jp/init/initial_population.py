@@ -395,6 +395,134 @@ def assign_age(
 
 
 # ---------------------------------------------------------------------------
+# Step 6 (zero-error variant): Murata 2017 §3 準拠の F-W 誤差 0 化 (Issue #77)
+# ---------------------------------------------------------------------------
+
+
+def _largest_remainder_split(target_counts: dict[int, int], total: int) -> dict[int, int]:
+    """``target_counts`` の比率で ``total`` を整数分配する (Largest Remainder).
+
+    target が空 or total=0 のとき空 dict を返す。
+    """
+    if total <= 0 or not target_counts:
+        return {}
+    target_total = sum(target_counts.values())
+    if target_total <= 0:
+        return {}
+    # 各 age に float 値を割り当て
+    floats = {age: total * count / target_total for age, count in target_counts.items()}
+    # floor で整数化
+    integers = {age: int(np.floor(v)) for age, v in floats.items()}
+    remainder = total - sum(integers.values())
+    if remainder > 0:
+        # 小数部の大きい順に +1 を分配。tie-break は age 昇順 (決定論的)
+        sorted_ages = sorted(
+            floats.keys(),
+            key=lambda a: (-(floats[a] - integers[a]), a),
+        )
+        for age in sorted_ages[:remainder]:
+            integers[age] += 1
+    return integers
+
+
+def assign_age_zero_error(
+    sex_entries: list[HouseholdSexEntry],
+    demo_by_ft_role: list[DemographicByFamilyTypeRoleRow],
+    rng: np.random.Generator,
+) -> list[HouseholdAgeEntry]:
+    """各 (family_type, role, sex) で target 比率を Largest Remainder で割当.
+
+    Murata 2017 §3 / Issue #77。target に従って決定論的に age を割り当てるため、
+    生成人口の F-W 統計（family_type × role × sex × age）の L1 誤差が 0 に近づく。
+    target が hard constraint (``ROLE_AGE_CONSTRAINTS``) と矛盾する age を含む
+    場合は、その age を割当対象から除外し、有効 age のみで Largest Remainder を
+    計算する。完全一致は target がハード制約を満たす場合のみ達成される。
+
+    Parameters
+    ----------
+    sex_entries : list[HouseholdSexEntry]
+        Step 5 の出力。sex 割当済みの世帯リスト。
+    demo_by_ft_role : list[DemographicByFamilyTypeRoleRow]
+        family_type × role × sex × age 分布（必須）。
+    rng : np.random.Generator
+        person を target 割当に並べる際のシャッフル用（決定論的）。
+        現実装では person の登場順を保つため shuffle しない。
+
+    Returns
+    -------
+    list[HouseholdAgeEntry]
+        age 割当済みの世帯リスト。
+    """
+    # 1) (family_type, role, sex) ごとに target counts を集計
+    target_pool: dict[tuple[str, str, str], dict[int, int]] = {}
+    for row in demo_by_ft_role:
+        key = (row.family_type, row.role, row.sex)
+        if key not in target_pool:
+            target_pool[key] = {}
+        target_pool[key][row.age] = target_pool[key].get(row.age, 0) + row.count
+
+    # 2) (family_type, role, sex) ごとに person index のリストを集計
+    persons_by_key: dict[tuple[str, str, str], list[tuple[int, int]]] = {}
+    # entry_index, person_index_in_entry を保存
+    for ent_i, entry in enumerate(sex_entries):
+        for p_i, (role, sex) in enumerate(zip(entry.roles, entry.sexes, strict=True)):
+            key = (entry.plan.family_type, role, sex)
+            persons_by_key.setdefault(key, []).append((ent_i, p_i))
+
+    # 3) 各 person に age を割り当てる準備（entry × person）
+    ages_per_entry: list[list[int | None]] = [[None] * len(entry.roles) for entry in sex_entries]
+
+    # rng の決定論性を維持: tie-breaking として使うが、現実装では使わない
+    del rng
+
+    # 4) 各 (family_type, role, sex) について Largest Remainder で age を割当
+    for key, persons in persons_by_key.items():
+        n_persons = len(persons)
+        target = target_pool.get(key, {})
+
+        role = key[1]
+        min_age, max_age = ROLE_AGE_CONSTRAINTS.get(role, (0, 120))
+        # ハード制約を満たす age のみを残す
+        valid_target = {age: cnt for age, cnt in target.items() if min_age <= age <= max_age}
+
+        if not valid_target:
+            # target が hard constraint を満たさない、または target が無い:
+            # フォールバック (clamp された min_age を全 person に割り当てる、
+            # または target=空のまま N 人を最低年齢に均等配置)
+            for ent_i, p_i in persons:
+                ages_per_entry[ent_i][p_i] = min_age
+            continue
+
+        # Largest Remainder で N を age 別に分配
+        age_counts = _largest_remainder_split(valid_target, n_persons)
+
+        # age を person に順次割当（age 昇順、person は登場順）
+        person_iter = iter(persons)
+        for age in sorted(age_counts.keys()):
+            n = age_counts[age]
+            for _ in range(n):
+                ent_i, p_i = next(person_iter)
+                ages_per_entry[ent_i][p_i] = age
+        # 余りが出ないことを Largest Remainder が保証する
+
+    # 5) None が残っていないか確認、結果を組み立て
+    result: list[HouseholdAgeEntry] = []
+    for entry, ages in zip(sex_entries, ages_per_entry, strict=True):
+        # None が残っていれば想定外
+        final_ages = [a if a is not None else 0 for a in ages]
+        result.append(
+            HouseholdAgeEntry(
+                plan=entry.plan,
+                roles=entry.roles,
+                sexes=entry.sexes,
+                ages=final_ages,
+            )
+        )
+
+    return result
+
+
+# ---------------------------------------------------------------------------
 # 統合関数: generate_initial_population
 # ---------------------------------------------------------------------------
 
@@ -402,6 +530,8 @@ def assign_age(
 def generate_initial_population(
     stats: InitStats,
     rng: np.random.Generator,
+    *,
+    use_zero_error_init: bool = False,
 ) -> PopulationArrays:
     """CSV 統計から初期人口（PopulationArrays）を生成する.
 
@@ -420,6 +550,10 @@ def generate_initial_population(
         必須・任意の入力統計をまとめたコンテナ。
     rng : np.random.Generator
         乱数発生器。``SeedRegistry(root=42).rng("init")`` で生成するのを推奨。
+    use_zero_error_init : bool
+        True で Step 6 を Murata 2017 §3 準拠の決定論的 Largest Remainder で
+        実行し、F-W 統計（family_type × role × sex × age）の誤差 0 化を狙う
+        （Issue #77）。``stats.demographic_by_family_type_role`` が必須。
 
     Returns
     -------
@@ -451,13 +585,26 @@ def generate_initial_population(
     # Step 5: sex の割当（rng 使用）
     sex_entries = assign_sex(role_entries, stats.demographic_by_family_type_role, rng)
 
-    # Step 6: age の割当（rng 使用、ハード制約付き）
-    age_entries = assign_age(
-        sex_entries,
-        stats.demographic_by_age_sex,
-        stats.demographic_by_family_type_role,
-        rng,
-    )
+    # Step 6: age の割当
+    if use_zero_error_init:
+        if stats.demographic_by_family_type_role is None:
+            msg = (
+                "use_zero_error_init=True のとき stats.demographic_by_family_type_role "
+                "が必要です（target 比率を Largest Remainder で割り当てるため）"
+            )
+            raise ValueError(msg)
+        age_entries = assign_age_zero_error(
+            sex_entries,
+            stats.demographic_by_family_type_role,
+            rng,
+        )
+    else:
+        age_entries = assign_age(
+            sex_entries,
+            stats.demographic_by_age_sex,
+            stats.demographic_by_family_type_role,
+            rng,
+        )
 
     # Household ドメインオブジェクトへ変換し、PopulationArrays を生成
     from synthpop_jp.domain.household import Household

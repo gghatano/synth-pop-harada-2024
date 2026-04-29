@@ -185,12 +185,17 @@ class ObjectiveConfig(BaseModel):
         True で D (male pyramid) と E (female pyramid) を目的関数から除外
         （Murata 式(3) 準拠、Issue #76）。``use_family_type_pyramid=True`` と
         併用する必要がある。
+    use_zero_error_init : bool
+        True で初期人口生成時に F-W 統計（family_type × role × sex × age）の
+        誤差を 0 化する手続きを使う（Murata 2017 §3 / Issue #77）。
+        ``demographic_by_family_type_role.csv`` が必須。デフォルト False。
     """
 
     model_config = ConfigDict(extra="forbid")
 
     use_family_type_pyramid: bool = False
     exclude_male_female_pyramid: bool = False
+    use_zero_error_init: bool = False
 
     @model_validator(mode="after")
     def validate_objective_mode(self) -> ObjectiveConfig:
