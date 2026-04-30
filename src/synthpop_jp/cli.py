@@ -773,10 +773,20 @@ def evaluate(
 
         narrow_evaluator = NarrowUtilityEvaluator(seed=settings.seed)
         metrics.update(narrow_evaluator.evaluate(arrays, holdout))
+
+        # Issue #99: distance-based privacy metrics (DCR / NNDR / ARD)
+        from synthpop_jp.evaluate.privacy_metrics import (
+            ARDEvaluator,
+            DCREvaluator,
+            NNDREvaluator,
+        )
+
+        for ev in (DCREvaluator(), NNDREvaluator(), ARDEvaluator()):
+            metrics.update(ev.evaluate(arrays, holdout))
     else:
         console.print(
-            "[yellow]--real-persons-csv 未指定のため CAP/TCAP・broad/narrow utility は"
-            "スキップ[/yellow]"
+            "[yellow]--real-persons-csv 未指定のため CAP/TCAP・broad/narrow utility・"
+            "DCR/NNDR/ARD はスキップ[/yellow]"
         )
 
     # metrics.json に追記（既存キーは保持）
