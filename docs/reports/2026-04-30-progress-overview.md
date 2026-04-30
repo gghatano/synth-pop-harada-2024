@@ -172,7 +172,7 @@ SA に乗せる遷移と目的関数を、Murata 2017 論文 §11〜§12 の仕�
 
 - **e-Stat 実データの取り込み配管**: `scripts/fetch_estat.py` を整備し、ダミーデータでなく国勢調査の実集計表で動かせるようにする
 - **改善ループ（rule_based / Pareto）**: 評価結果を見て config を自動調整する Phase 5 の準備
-- **mkdocs サイト化**: ドキュメント全体を Web で公開可能な形に
+- **mkdocs サイト化**: v0.2 MVP（Issue #102）で `mkdocs.yml` + 日英 index + how-it-works (EN) + CI build を整備済み。GitHub Pages デプロイと既存 docs の repo-relative link を mkdocs 形式に直す作業は別 Issue
 
 詳細な作業計画: [`docs/reviews/action-plan.md`](../reviews/action-plan.md) §3.5 以降
 

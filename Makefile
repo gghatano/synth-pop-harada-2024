@@ -49,8 +49,10 @@ quickstart:
 	uv run synthpop-jp quickstart
 
 docs:
-	@echo "[Phase 4] mkdocs build — not yet implemented"
-	@exit 1
+	uv run mkdocs build
+
+docs-serve:
+	uv run mkdocs serve
 
 paper:
 	@echo "[Phase 6] paper_results reproduction — not yet implemented"

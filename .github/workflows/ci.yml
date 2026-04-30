@@ -47,6 +47,12 @@ jobs:
           --cov-report=term-missing
           --cov-fail-under=0
 
+      - name: mkdocs build
+        # Issue #102: ドキュメントサイトのビルドが壊れていないか確認。
+        # MVP では --strict を使わない（既存 docs の repo-relative link を mkdocs
+        # 形式に直す作業は別 Issue）。Phase 4 v0.2 残課題として progress-overview に記録。
+        run: uv run mkdocs build
+
       - name: Smoke benchmark
         # 1000 世帯 × 1 万反復のエンドツーエンド軽量ベンチマークのみ（5 秒閾値）
         # μs スケールの per-call ベンチ（test_objective_delta / test_transition_propose）は
