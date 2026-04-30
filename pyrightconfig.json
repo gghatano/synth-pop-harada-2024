@@ -40,11 +40,12 @@
       "reportPrivateUsage": "none"
     },
     {
-      "root": "tests/evaluate/test_broad_utility.py",
-      "reportPrivateUsage": "none",
+      "root": "tests/evaluate",
       "reportUnknownMemberType": "none",
       "reportUnknownVariableType": "none",
-      "reportUnknownArgumentType": "none"
+      "reportUnknownArgumentType": "none",
+      "reportArgumentType": "none",
+      "reportPrivateUsage": "none"
     },
     {
       "root": "tests/domain",
