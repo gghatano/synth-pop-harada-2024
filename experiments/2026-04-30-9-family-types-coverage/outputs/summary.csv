@@ -1,0 +1,10 @@
+family_type,mean_initial_l1,mean_final_l1,mean_delta
+single,9.0,9.0,0.0
+couple,31.0,31.0,0.0
+couple_and_children,111.0,79.0,-32.0
+father_and_children,34.0,26.0,-8.0
+mother_and_children,43.0,23.0,-20.0
+couple_and_parents,36.0,36.0,0.0
+couple_and_a_parent,16.0,10.0,-6.0
+couple_children_and_parents,36.0,34.0,-2.0
+couple_children_and_a_parent,48.0,42.0,-6.0
