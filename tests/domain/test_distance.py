@@ -34,9 +34,7 @@ class TestGowerDistanceSinglePair:
         # 2 categorical: x=[0,1], y=[0,2] → 1 mismatch / 2 = 0.5
         x = np.array([0, 1])
         y = np.array([0, 2])
-        assert gower_distance(
-            x, y, is_numeric=[False, False], ranges=[]
-        ) == pytest.approx(0.5)
+        assert gower_distance(x, y, is_numeric=[False, False], ranges=[]) == pytest.approx(0.5)
 
     def test_mixed_handworked(self) -> None:
         # 3 attributes:
@@ -49,9 +47,7 @@ class TestGowerDistanceSinglePair:
         is_numeric = [True, False, False]
         ranges = [80.0]
         expected = (0.25 + 0.0 + 1.0) / 3.0
-        assert gower_distance(x, y, is_numeric=is_numeric, ranges=ranges) == pytest.approx(
-            expected
-        )
+        assert gower_distance(x, y, is_numeric=is_numeric, ranges=ranges) == pytest.approx(expected)
 
     def test_symmetry(self) -> None:
         x = np.array([10.0, 1, 2])
@@ -105,18 +101,16 @@ class TestGowerDistanceMatrix:
         ranges_each = [float(combined[:, 0].max() - combined[:, 0].min())]
         for i in range(10):
             for j in range(8):
-                pair_d = gower_distance(
-                    x[i], y[j], is_numeric=is_numeric, ranges=ranges_each
-                )
+                pair_d = gower_distance(x[i], y[j], is_numeric=is_numeric, ranges=ranges_each)
                 assert m[i, j] == pytest.approx(pair_d, abs=1e-9), (
                     f"mismatch at ({i}, {j}): matrix={m[i, j]}, pair={pair_d}"
                 )
 
     def test_matrix_symmetric_when_x_eq_y(self) -> None:
         rng = np.random.default_rng(7)
-        x = np.column_stack(
-            [rng.uniform(0, 10, size=5), rng.integers(0, 3, size=5)]
-        ).astype(np.float64)
+        x = np.column_stack([rng.uniform(0, 10, size=5), rng.integers(0, 3, size=5)]).astype(
+            np.float64
+        )
         is_numeric = [True, False]
         m = gower_distance_matrix(x, x, is_numeric=is_numeric)
         for i in range(5):
