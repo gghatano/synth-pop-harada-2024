@@ -83,6 +83,13 @@ def check_pr_status(
     PR データは gh pr view --json state,mergeable,headRefName,statusCheckRollup
     の出力を想定する。
 
+    statusCheckRollup の各要素は ``__typename`` によって結果キーが異なる:
+
+    - ``CheckRun`` (GitHub Actions): ``conclusion`` キーに SUCCESS / FAILURE 等
+    - ``StatusContext`` (旧式 status API): ``state`` キーに SUCCESS / FAILURE 等
+
+    本関数は両方を許容し、``state`` を優先しつつ無ければ ``conclusion`` を見る。
+
     Parameters
     ----------
     pr_data:
@@ -109,9 +116,10 @@ def check_pr_status(
     if state != "OPEN":
         return "error", state, head_ref
 
-    # CI チェックが存在する場合、最後の状態が SUCCESS でなければ失敗
+    # CI チェックが存在する場合、最後の結果が SUCCESS でなければ失敗
     if status_checks:
-        last_status = status_checks[-1].get("state", "")
+        last_check = status_checks[-1]
+        last_status = last_check.get("state") or last_check.get("conclusion") or ""
         if last_status != "SUCCESS":
             return "ci_failed", state, head_ref
 
