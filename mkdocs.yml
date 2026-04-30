@@ -1,0 +1,75 @@
+site_name: synthpop-jp
+site_description: |-
+  Murata 2017 系の合成人口生成と Harada 2024 系の評価軸を Python で
+  再実装する研究プロトタイプ
+site_url: https://gghatano.github.io/synth-pop-harada-2024/
+repo_url: https://github.com/gghatano/synth-pop-harada-2024
+repo_name: gghatano/synth-pop-harada-2024
+docs_dir: docs
+
+theme:
+  name: material
+  language: ja
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - content.code.copy
+    - search.suggest
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: Switch to light mode
+
+# 既存 docs/ ディレクトリ全体を docs_dir として使う。
+# nav は Issue #102 v0.2 として最小構成: トップページ + 主要セクションのインデックス。
+nav:
+  - Home (JA): index.md
+  - Home (EN): index.en.md
+  - 開始ガイド: getting-started/development-workflow.md
+  - 手法と使い方: guides/how-it-works.md
+  - How it works (EN): guides/how-it-works.en.md
+  - 進捗オーバービュー: reports/2026-04-30-progress-overview.md
+  - Phase 3 拡張まとめ: reports/2026-04-29-phase3-extended-summary.md
+  - Phase 2 ベンチマーク: reports/phase-02-benchmarks.md
+  - 仕様 (spec): spec/spec.md
+  - 評価指標: spec/metrics.md
+  - データ契約: spec/data_contract.md
+  - 実験レポート形式: spec/experiment_report_format.md
+  - MIA Protocol (Phase 5): spec/mia_protocol.md
+  - 開発ルール:
+      - Issue 駆動開発: rules/issue-driven-development.md
+      - TDD: rules/tdd.md
+      - Git worktree: rules/git-worktree.md
+      - ブランチ戦略: rules/branch-strategy.md
+      - 実験管理: rules/experiment-management.md
+      - HTML レポート: rules/html-reporting.md
+      - 文章スタイル: rules/documentation-style.md
+      - CI parity: rules/ci-parity.md
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.superfences
+  - pymdownx.details
+
+plugins:
+  - search
+
+# strict は CI で別途 --strict を渡す（dev 用 build ではゆるく）
+strict: false
