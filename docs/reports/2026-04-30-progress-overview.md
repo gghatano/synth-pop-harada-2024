@@ -165,8 +165,8 @@ SA に乗せる遷移と目的関数を、Murata 2017 論文 §11〜§12 の仕�
 
 ### Phase 3a の残り
 
-- **extended objective の 21 統計フル対応**: 現状 5+10 = 15 統計まで。残り 6 統計（spec §11.3 の式定義）
-- **9 family types フル対応**: 現状 sample_case で扱う型のみ。残りの型を追加して `data/sample_case/` を拡張
+- **extended objective の 21 統計フル対応**: 現状 5+10 = 15 統計まで。残り 6 統計（spec §11.3 の式定義）。Issue #94 で論点提起中（Murata 2017 の Table 13 enumeration が必要）
+- ~~**9 family types フル対応**~~ → **完了**（2026-04-30、Issue #95）。`data/sample_case/` は 9 family_types すべてを含み、`tests/init/test_nine_family_types_coverage.py` で生成・SA 経路で全 9 種が出現することを保証。SA 収束記録は [`experiments/2026-04-30-9-family-types-coverage/report.md`](../../experiments/2026-04-30-9-family-types-coverage/report.md) を参照
 
 ### Phase 4 以降（構想中）
 
