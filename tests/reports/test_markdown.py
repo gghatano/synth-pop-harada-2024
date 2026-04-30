@@ -102,6 +102,49 @@ class TestOthersSection:
         assert "plugin_dummy" in md or "99.0" in md
 
 
+class TestBroadUtilitySection:
+    """broad utility セクション（Issue #96）."""
+
+    def test_univariate_table_present(self) -> None:
+        metrics: dict[str, float] = {
+            "broad_utility.tv.age": 0.25,
+            "broad_utility.l1.age": 0.50,
+            "broad_utility.tv.sex": 0.10,
+            "broad_utility.l1.sex": 0.20,
+        }
+        md = render_metrics_table13(metrics)
+        assert "broad utility" in md
+        assert "age" in md
+        assert "sex" in md
+        # TV / L1 の値が含まれる
+        assert "0.25" in md or "0.3" in md  # 値の四捨五入差を許容
+
+    def test_pair_tv_table_present(self) -> None:
+        metrics: dict[str, float] = {
+            "broad_utility.pair_tv.age__sex": 0.33,
+            "broad_utility.pair_tv.age__role": 0.44,
+        }
+        md = render_metrics_table13(metrics)
+        assert "age__sex" in md
+        assert "age__role" in md
+
+    def test_correlation_scalars_present(self) -> None:
+        metrics: dict[str, float] = {
+            "broad_utility.correlation_frobenius_diff": 1.23,
+            "broad_utility.correlation_max_abs_diff": 0.55,
+            "broad_utility.sum_pair_tv": 1.10,
+        }
+        md = render_metrics_table13(metrics)
+        assert "correlation_frobenius_diff" in md
+        assert "correlation_max_abs_diff" in md
+        assert "sum_pair_tv" in md
+
+    def test_broad_utility_section_skipped_when_empty(self) -> None:
+        # broad_utility キーが無いとセクション自体が出ない
+        md = render_metrics_table13({"aggregate.l1.total": 1.0})
+        assert "broad utility" not in md.lower() or "## 3. 有用性" not in md
+
+
 class TestStructure:
     """全体構造."""
 

@@ -139,6 +139,44 @@ class TestEvaluateIntegration:
         # holdout = synthetic なので perfect coverage
         assert abs(metrics["cap.coverage"] - 1.0) < 1e-9
 
+    def test_evaluate_appends_broad_utility_keys_with_real_persons_csv(
+        self, tmp_path: Path
+    ) -> None:
+        """``--real-persons-csv`` を指定すると ``broad_utility.*`` キーも追記される（Issue #96）."""
+        config_path = _make_config_yaml(tmp_path)
+        runner.invoke(app, ["generate", "--config", str(config_path)])
+        synthetic_csv = tmp_path / "out" / "synthetic_persons.csv"
+        eval_result = runner.invoke(
+            app,
+            [
+                "evaluate",
+                "--config",
+                str(config_path),
+                "--real-persons-csv",
+                str(synthetic_csv),
+            ],
+        )
+        assert eval_result.exit_code == 0, eval_result.output
+        metrics = json.loads((tmp_path / "out" / "metrics.json").read_text(encoding="utf-8"))
+        # 単変量 / pair / scalar の代表キーが揃っていること
+        for attr in ("age", "sex", "role", "family_type"):
+            assert f"broad_utility.tv.{attr}" in metrics
+            assert f"broad_utility.l1.{attr}" in metrics
+        assert "broad_utility.pair_tv.age__sex" in metrics
+        assert "broad_utility.correlation_frobenius_diff" in metrics
+        # synth=real なので TV / Frobenius は 0 のはず
+        assert metrics["broad_utility.tv.age"] == 0.0
+        assert metrics["broad_utility.correlation_frobenius_diff"] == 0.0
+
+    def test_evaluate_skips_broad_utility_without_real_persons_csv(self, tmp_path: Path) -> None:
+        """``--real-persons-csv`` 未指定時は ``broad_utility.*`` が含まれない（Issue #96）."""
+        config_path = _make_config_yaml(tmp_path)
+        runner.invoke(app, ["generate", "--config", str(config_path)])
+        eval_result = runner.invoke(app, ["evaluate", "--config", str(config_path)])
+        assert eval_result.exit_code == 0
+        metrics = json.loads((tmp_path / "out" / "metrics.json").read_text(encoding="utf-8"))
+        assert not any(k.startswith("broad_utility.") for k in metrics)
+
     def test_evaluate_fails_with_missing_real_persons_csv(self, tmp_path: Path) -> None:
         """``--real-persons-csv`` のパスが無ければ exit code 1（Issue #65）."""
         config_path = _make_config_yaml(tmp_path)

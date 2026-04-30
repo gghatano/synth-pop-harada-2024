@@ -757,12 +757,20 @@ def evaluate(
                 f"[red]エラー:[/red] --real-persons-csv が見つかりません: {real_persons_csv}"
             )
             raise typer.Exit(code=1)
-        console.print(f"[bold]CAP holdout:[/bold] {real_persons_csv}")
+        console.print(f"[bold]CAP / broad utility holdout:[/bold] {real_persons_csv}")
         holdout = reconstruct_population_arrays_from_persons_csv(real_persons_csv)
         cap_evaluator = CAPEvaluator()
         metrics.update(cap_evaluator.evaluate(arrays, holdout))
+
+        # Issue #96: broad utility (synthetic vs real reference)
+        from synthpop_jp.evaluate.utility.broad import BroadUtilityEvaluator
+
+        broad_evaluator = BroadUtilityEvaluator()
+        metrics.update(broad_evaluator.evaluate(arrays, holdout))
     else:
-        console.print("[yellow]--real-persons-csv 未指定のため CAP/TCAP はスキップ[/yellow]")
+        console.print(
+            "[yellow]--real-persons-csv 未指定のため CAP/TCAP・broad utility はスキップ[/yellow]"
+        )
 
     # metrics.json に追記（既存キーは保持）
     metrics_path = settings.output_dir / "metrics.json"
