@@ -775,7 +775,8 @@ def evaluate(
         metrics.update(narrow_evaluator.evaluate(arrays, holdout))
     else:
         console.print(
-            "[yellow]--real-persons-csv 未指定のため CAP/TCAP・broad/narrow utility はスキップ[/yellow]"
+            "[yellow]--real-persons-csv 未指定のため CAP/TCAP・broad/narrow utility は"
+            "スキップ[/yellow]"
         )
 
     # metrics.json に追記（既存キーは保持）

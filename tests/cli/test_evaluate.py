@@ -140,7 +140,7 @@ class TestEvaluateIntegration:
         assert abs(metrics["cap.coverage"] - 1.0) < 1e-9
 
     def test_evaluate_appends_broad_and_narrow_utility_keys(self, tmp_path: Path) -> None:
-        """``--real-persons-csv`` 指定時に ``broad_utility.*`` と ``narrow_utility.*`` キーが追記される (Issue #96, #97)."""
+        """real-persons-csv 指定時に utility キーが追記される (#96, #97)."""
         config_path = _make_config_yaml(tmp_path)
         runner.invoke(app, ["generate", "--config", str(config_path)])
         synthetic_csv = tmp_path / "out" / "synthetic_persons.csv"
@@ -174,7 +174,7 @@ class TestEvaluateIntegration:
                 assert f"narrow_utility.{task}.trts_macro_f1" in metrics
 
     def test_evaluate_skips_utility_without_real_persons_csv(self, tmp_path: Path) -> None:
-        """``--real-persons-csv`` 未指定時は ``broad_utility.*`` / ``narrow_utility.*`` キーが含まれない (Issue #96, #97)."""
+        """real-persons-csv 未指定で utility キーが含まれない (#96, #97)."""
         config_path = _make_config_yaml(tmp_path)
         runner.invoke(app, ["generate", "--config", str(config_path)])
         eval_result = runner.invoke(app, ["evaluate", "--config", str(config_path)])
