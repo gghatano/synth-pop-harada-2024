@@ -173,8 +173,7 @@ class TestBroadUtilitySection:
         assert "broad utility" in md
         assert "age" in md
         assert "sex" in md
-        # TV / L1 の値が含まれる
-        assert "0.25" in md or "0.3" in md  # 値の四捨五入差を許容
+        assert "0.25" in md or "0.3" in md
 
     def test_pair_tv_table_present(self) -> None:
         metrics: dict[str, float] = {
@@ -197,9 +196,34 @@ class TestBroadUtilitySection:
         assert "sum_pair_tv" in md
 
     def test_broad_utility_section_skipped_when_empty(self) -> None:
-        # broad_utility キーが無いとセクション自体が出ない
         md = render_metrics_table13({"aggregate.l1.total": 1.0})
         assert "broad utility" not in md.lower() or "## 3. 有用性" not in md
+
+
+class TestNarrowUtilitySection:
+    """narrow utility セクション（Issue #97）."""
+
+    def test_macro_f1_task_present(self) -> None:
+        metrics: dict[str, float] = {
+            "narrow_utility.task_a.tstr_macro_f1": 0.85,
+            "narrow_utility.task_a.trts_macro_f1": 0.83,
+        }
+        md = render_metrics_table13(metrics)
+        assert "task_a" in md
+        assert "macro-F1" in md or "macro" in md
+
+    def test_rmse_task_present(self) -> None:
+        metrics: dict[str, float] = {
+            "narrow_utility.task_b.tstr_rmse": 1.20,
+            "narrow_utility.task_b.trts_rmse": 1.30,
+        }
+        md = render_metrics_table13(metrics)
+        assert "task_b" in md
+        assert "RMSE" in md
+
+    def test_narrow_section_skipped_when_empty(self) -> None:
+        md = render_metrics_table13({"aggregate.l1.total": 1.0})
+        assert "narrow utility" not in md.lower() or "## 4. 有用性: narrow" not in md
 
 
 class TestStructure:

@@ -132,20 +132,14 @@ def _render_broad_utility(
     pair_tv: dict[str, float],
     scalars: dict[str, float],
 ) -> list[str]:
-    """Broad utility セクションを Markdown で組み立てる (Issue #96).
-
-    ``univariate`` は ``{attr: {"tv": ..., "l1": ...}}``、
-    ``pair_tv`` は ``{"a__b": value}``、
-    ``scalars`` は ``{"sum_pair_tv": ..., "correlation_frobenius_diff": ...,
-    "correlation_max_abs_diff": ...}`` を期待する。
-    """
+    """Broad utility セクションを Markdown で組み立てる (Issue #96)."""
     lines: list[str] = []
     if not (univariate or pair_tv or scalars):
         return lines
     lines.append("## 3. 有用性: broad utility")
     lines.append("")
     if univariate:
-        lines.append("### 単変量 TV / L1")
+        lines.append("### 3.1 単変量 TV / L1")
         lines.append("")
         lines.append("| 属性 | TV | L1 |")
         lines.append("|---|---:|---:|")
@@ -156,7 +150,7 @@ def _render_broad_utility(
             lines.append(f"| {attr} | {tv} | {l1} |")
         lines.append("")
     if pair_tv:
-        lines.append("### 属性ペア joint TV")
+        lines.append("### 3.2 属性ペア joint TV")
         lines.append("")
         lines.append("| ペア | joint TV |")
         lines.append("|---|---:|")
@@ -164,13 +158,36 @@ def _render_broad_utility(
             lines.append(f"| {k} | {_format_value(pair_tv[k])} |")
         lines.append("")
     if scalars:
-        lines.append("### スカラ要約")
+        lines.append("### 3.3 スカラ要約")
         lines.append("")
         lines.append("| 指標 | 値 |")
         lines.append("|---|---:|")
         for k in sorted(scalars.keys()):
             lines.append(f"| {k} | {_format_value(scalars[k])} |")
         lines.append("")
+    return lines
+
+
+def _render_narrow_utility(rows: dict[str, dict[str, float]]) -> list[str]:
+    """Narrow utility セクションを Markdown で組み立てる (Issue #97)."""
+    lines: list[str] = []
+    if not rows:
+        return lines
+    lines.append("## 4. 有用性: narrow utility (TSTR / TRTS)")
+    lines.append("")
+    lines.append("| タスク | 指標 | TSTR | TRTS |")
+    lines.append("|---|---|---:|---:|")
+    for task in sorted(rows.keys()):
+        sub = rows[task]
+        if "tstr_macro_f1" in sub:
+            tstr = _format_value(sub.get("tstr_macro_f1", 0.0))
+            trts = _format_value(sub.get("trts_macro_f1", 0.0))
+            lines.append(f"| {task} | macro-F1 | {tstr} | {trts} |")
+        elif "tstr_rmse" in sub:
+            tstr = _format_value(sub.get("tstr_rmse", 0.0))
+            trts = _format_value(sub.get("trts_rmse", 0.0))
+            lines.append(f"| {task} | RMSE | {tstr} | {trts} |")
+    lines.append("")
     return lines
 
 
@@ -317,6 +334,7 @@ def render_metrics_table13(
     broad_univariate: dict[str, dict[str, float]] = defaultdict(dict)
     broad_pair_tv: dict[str, float] = {}
     broad_scalars: dict[str, float] = {}
+    narrow_per_task: dict[str, dict[str, float]] = defaultdict(dict)
     others: dict[str, float] = {}
 
     for key, value in metrics.items():
@@ -368,6 +386,14 @@ def render_metrics_table13(
         elif key.startswith("broad_utility."):
             scalar_key = key.removeprefix("broad_utility.")
             broad_scalars[scalar_key] = float(value)
+        elif key.startswith("narrow_utility."):
+            tail = key.removeprefix("narrow_utility.")
+            parts = tail.split(".", 1)
+            if len(parts) == 2:
+                task, metric = parts
+                narrow_per_task[task][metric] = float(value)
+            else:
+                others[key] = float(value)
         else:
             others[key] = float(value)
 
@@ -390,7 +416,10 @@ def render_metrics_table13(
     # 3. 有用性 broad utility (Issue #96)
     lines.extend(_render_broad_utility(dict(broad_univariate), broad_pair_tv, broad_scalars))
 
-    # 4. その他
+    # 4. 有用性 narrow utility (Issue #97)
+    lines.extend(_render_narrow_utility(dict(narrow_per_task)))
+
+    # 5. その他
     if others:
         lines.extend(_render_others(others))
 
