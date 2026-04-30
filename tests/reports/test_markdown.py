@@ -102,6 +102,63 @@ class TestOthersSection:
         assert "plugin_dummy" in md or "99.0" in md
 
 
+class TestCitationSection:
+    """出典セクション（Issue #101）."""
+
+    def test_aggregate_keys_yield_murata_citation(self) -> None:
+        metrics: dict[str, float] = {"aggregate.l1.total": 12.0}
+        md = render_metrics_table13(metrics)
+        assert "出典" in md or "citations" in md.lower()
+        assert "Murata 2017" in md
+
+    def test_cap_keys_yield_taub_citation(self) -> None:
+        metrics: dict[str, float] = {"cap.generalized": 0.4}
+        md = render_metrics_table13(metrics)
+        assert "Taub" in md or "Differential Correct Attribution" in md
+
+    def test_broad_utility_keys_yield_harada_citation(self) -> None:
+        metrics: dict[str, float] = {
+            "broad_utility.correlation_frobenius_diff": 1.0,
+        }
+        md = render_metrics_table13(metrics)
+        assert "Harada 2024" in md
+        assert "Cramér" in md or "dython" in md
+
+    def test_narrow_utility_keys_yield_esteban_citation(self) -> None:
+        metrics: dict[str, float] = {
+            "narrow_utility.task_a.tstr_macro_f1": 0.85,
+        }
+        md = render_metrics_table13(metrics)
+        assert "TSTR" in md or "Esteban" in md or "Harada 2024" in md
+
+
+class TestLicenseSection:
+    """ライセンスセクション（Issue #101）."""
+
+    def test_default_license_section(self) -> None:
+        metrics: dict[str, float] = {"aggregate.l1.total": 1.0}
+        md = render_metrics_table13(metrics)
+        assert "ライセンス" in md
+        assert "Apache-2.0" in md
+
+    def test_estat_provenance_yields_estat_attribution(self) -> None:
+        metrics: dict[str, float] = {"aggregate.l1.total": 1.0}
+        provenance: dict[str, object] = {
+            "data_source": "e-stat",
+            "source_url": "https://www.e-stat.go.jp/...",
+            "retrieved_at": "2026-04-30",
+        }
+        md = render_metrics_table13(metrics, provenance=provenance)
+        assert "e-Stat" in md
+        assert "統計法 §44" in md or "出典表示" in md
+        assert "2026-04-30" in md
+
+    def test_provenance_none_default(self) -> None:
+        # provenance なしでも壊れない
+        md = render_metrics_table13({"aggregate.l1.total": 1.0})
+        assert "Apache-2.0" in md
+
+
 class TestBroadUtilitySection:
     """broad utility セクション（Issue #96）."""
 
