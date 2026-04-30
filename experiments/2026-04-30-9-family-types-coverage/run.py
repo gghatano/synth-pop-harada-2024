@@ -172,6 +172,7 @@ def run_one_seed(stats: InitStats, seed: int) -> dict[str, object]:
 
 
 def main() -> None:
+    """seed×5 で SA を回し、family_type ごとの L1 を 3 つの CSV/JSON に書き出す."""
     OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)
     stats = _load_stats()
 
@@ -200,7 +201,8 @@ def main() -> None:
             seed = r["seed"]
             init_map = r["initial_l1_per_ft"]
             final_map = r["final_l1_per_ft"]
-            assert isinstance(init_map, dict) and isinstance(final_map, dict)
+            assert isinstance(init_map, dict)
+            assert isinstance(final_map, dict)
             for ft in NINE_FAMILY_TYPES:
                 init_val = float(init_map[ft])
                 final_val = float(final_map[ft])
@@ -217,7 +219,8 @@ def main() -> None:
             for r in rows:
                 im = r["initial_l1_per_ft"]
                 fm = r["final_l1_per_ft"]
-                assert isinstance(im, dict) and isinstance(fm, dict)
+                assert isinstance(im, dict)
+                assert isinstance(fm, dict)
                 init_vals.append(float(im[ft]))
                 final_vals.append(float(fm[ft]))
             mi = float(np.mean(init_vals))

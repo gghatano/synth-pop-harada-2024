@@ -168,9 +168,7 @@ class TestFwL1PerFamilyTypeWithZeroError:
 
         # zero_error mode
         rng_zero = SeedRegistry(root=42).rng("init")
-        arrays_zero = generate_initial_population(
-            sample_stats, rng_zero, use_zero_error_init=True
-        )
+        arrays_zero = generate_initial_population(sample_stats, rng_zero, use_zero_error_init=True)
 
         # extended objective を組む
         obj_default = ObjectiveState.from_arrays(
@@ -208,9 +206,7 @@ class TestFwL1PerFamilyTypeWithZeroError:
             per_ft_zero[ft_name] = l1_zero
 
         # zero_error が default を上回る family_type は許容しない
-        regressions = [
-            ft for ft in _NINE_FAMILY_TYPES if per_ft_zero[ft] > per_ft_default[ft]
-        ]
+        regressions = [ft for ft in _NINE_FAMILY_TYPES if per_ft_zero[ft] > per_ft_default[ft]]
         assert not regressions, (
             f"zero_error_init で L1 が悪化した family_type: {regressions}\n"
             f"default={per_ft_default}\nzero={per_ft_zero}"
