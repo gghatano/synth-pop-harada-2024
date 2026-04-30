@@ -45,6 +45,13 @@
       "reportUnknownMemberType": "none",
       "reportUnknownVariableType": "none",
       "reportUnknownArgumentType": "none"
+    },
+    {
+      "root": "tests/domain",
+      "reportUnknownMemberType": "none",
+      "reportUnknownVariableType": "none",
+      "reportUnknownArgumentType": "none",
+      "reportArgumentType": "none"
     }
   ]
 }
