@@ -38,6 +38,13 @@
       "reportCallIssue": "none",
       "reportAttributeAccessIssue": "none",
       "reportPrivateUsage": "none"
+    },
+    {
+      "root": "tests/evaluate/test_broad_utility.py",
+      "reportPrivateUsage": "none",
+      "reportUnknownMemberType": "none",
+      "reportUnknownVariableType": "none",
+      "reportUnknownArgumentType": "none"
     }
   ]
 }

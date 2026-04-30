@@ -34,7 +34,9 @@ from collections.abc import Iterable
 from typing import TYPE_CHECKING
 
 import numpy as np
-from scipy.stats import chi2_contingency  # pyright: ignore[reportMissingTypeStubs]
+from scipy.stats import (
+    chi2_contingency,  # pyright: ignore[reportMissingTypeStubs, reportUnknownVariableType]
+)
 
 if TYPE_CHECKING:
     from synthpop_jp.optimize.state import PopulationArrays

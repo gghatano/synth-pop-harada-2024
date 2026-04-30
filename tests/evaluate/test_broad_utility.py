@@ -233,9 +233,7 @@ class TestBroadUtilityEvaluator:
 
     def test_empty_populations_yield_zeros(self) -> None:
         ev = BroadUtilityEvaluator()
-        empty = _make_pop(
-            age=[], sex=[], role=[], family_type=[], household_id=[]
-        )
+        empty = _make_pop(age=[], sex=[], role=[], family_type=[], household_id=[])
         result = ev.evaluate(synthetic=empty, holdout=empty)
         # 空でも 0 除算しない
         for k, v in result.items():

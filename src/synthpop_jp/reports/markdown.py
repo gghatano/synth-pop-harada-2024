@@ -127,11 +127,58 @@ def _render_cap(global_rows: dict[str, float], per_ft: dict[str, dict[str, float
     return lines
 
 
+def _render_broad_utility(
+    univariate: dict[str, dict[str, float]],
+    pair_tv: dict[str, float],
+    scalars: dict[str, float],
+) -> list[str]:
+    """Broad utility セクションを Markdown で組み立てる (Issue #96).
+
+    ``univariate`` は ``{attr: {"tv": ..., "l1": ...}}``、
+    ``pair_tv`` は ``{"a__b": value}``、
+    ``scalars`` は ``{"sum_pair_tv": ..., "correlation_frobenius_diff": ...,
+    "correlation_max_abs_diff": ...}`` を期待する。
+    """
+    lines: list[str] = []
+    if not (univariate or pair_tv or scalars):
+        return lines
+    lines.append("## 3. 有用性: broad utility")
+    lines.append("")
+    if univariate:
+        lines.append("### 単変量 TV / L1")
+        lines.append("")
+        lines.append("| 属性 | TV | L1 |")
+        lines.append("|---|---:|---:|")
+        for attr in sorted(univariate.keys()):
+            row = univariate[attr]
+            tv = _format_value(row.get("tv", 0.0))
+            l1 = _format_value(row.get("l1", 0.0))
+            lines.append(f"| {attr} | {tv} | {l1} |")
+        lines.append("")
+    if pair_tv:
+        lines.append("### 属性ペア joint TV")
+        lines.append("")
+        lines.append("| ペア | joint TV |")
+        lines.append("|---|---:|")
+        for k in sorted(pair_tv.keys()):
+            lines.append(f"| {k} | {_format_value(pair_tv[k])} |")
+        lines.append("")
+    if scalars:
+        lines.append("### スカラ要約")
+        lines.append("")
+        lines.append("| 指標 | 値 |")
+        lines.append("|---|---:|")
+        for k in sorted(scalars.keys()):
+            lines.append(f"| {k} | {_format_value(scalars[k])} |")
+        lines.append("")
+    return lines
+
+
 def _render_others(rows: dict[str, float]) -> list[str]:
     lines: list[str] = []
     if not rows:
         return lines
-    lines.append("## 3. その他 / プラグイン")
+    lines.append("## 4. その他 / プラグイン")
     lines.append("")
     lines.append("| キー | 値 |")
     lines.append("|---|---:|")
@@ -161,6 +208,9 @@ def render_metrics_table13(metrics: dict[str, float]) -> str:
     rare_cell_per_ft: dict[str, dict[str, float]] = defaultdict(dict)
     cap_global: dict[str, float] = {}
     cap_per_ft: dict[str, dict[str, float]] = defaultdict(dict)
+    broad_univariate: dict[str, dict[str, float]] = defaultdict(dict)
+    broad_pair_tv: dict[str, float] = {}
+    broad_scalars: dict[str, float] = {}
     others: dict[str, float] = {}
 
     for key, value in metrics.items():
@@ -200,6 +250,18 @@ def render_metrics_table13(metrics: dict[str, float]) -> str:
         elif key.startswith("cap."):
             metric = key.removeprefix("cap.")
             cap_global[metric] = float(value)
+        elif key.startswith("broad_utility.tv."):
+            attr = key.removeprefix("broad_utility.tv.")
+            broad_univariate[attr]["tv"] = float(value)
+        elif key.startswith("broad_utility.l1."):
+            attr = key.removeprefix("broad_utility.l1.")
+            broad_univariate[attr]["l1"] = float(value)
+        elif key.startswith("broad_utility.pair_tv."):
+            pair_key = key.removeprefix("broad_utility.pair_tv.")
+            broad_pair_tv[pair_key] = float(value)
+        elif key.startswith("broad_utility."):
+            scalar_key = key.removeprefix("broad_utility.")
+            broad_scalars[scalar_key] = float(value)
         else:
             others[key] = float(value)
 
@@ -219,7 +281,10 @@ def render_metrics_table13(metrics: dict[str, float]) -> str:
         lines.extend(_render_rare_cell(rare_cell_global, rare_cell_per_ft))
         lines.extend(_render_cap(cap_global, cap_per_ft))
 
-    # 3. その他
+    # 3. 有用性 broad utility (Issue #96)
+    lines.extend(_render_broad_utility(dict(broad_univariate), broad_pair_tv, broad_scalars))
+
+    # 4. その他
     if others:
         lines.extend(_render_others(others))
 
