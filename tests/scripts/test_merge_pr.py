@@ -631,3 +631,84 @@ class TestCheckPRStatus:
 
         status, _state, _head_ref = m.check_pr_status(pr_data)
         assert status == "ci_failed"
+
+    def test_checkrun_success_returns_ok(self) -> None:
+        """GitHub Actions CheckRun（conclusion=SUCCESS）→ 'ok'。
+
+        gh pr view --json statusCheckRollup の実出力では、CheckRun は
+        ``state`` キーを持たず ``conclusion`` キーが結果を保持する。
+        """
+        m = _import_merge_pr()
+
+        pr_data = {
+            "state": "OPEN",
+            "mergeable": "MERGEABLE",
+            "headRefName": "feature/90-progress-docs",
+            "statusCheckRollup": [
+                {
+                    "__typename": "CheckRun",
+                    "conclusion": "SUCCESS",
+                    "status": "COMPLETED",
+                    "name": "py3.12 / ubuntu-latest",
+                    "workflowName": "CI",
+                }
+            ],
+        }
+
+        status, state, head_ref = m.check_pr_status(pr_data)
+        assert status == "ok"
+        assert state == "OPEN"
+        assert head_ref == "feature/90-progress-docs"
+
+    def test_checkrun_failure_returns_ci_failed(self) -> None:
+        """GitHub Actions CheckRun（conclusion=FAILURE）→ 'ci_failed'。"""
+        m = _import_merge_pr()
+
+        pr_data = {
+            "state": "OPEN",
+            "mergeable": "MERGEABLE",
+            "headRefName": "feature/90-progress-docs",
+            "statusCheckRollup": [
+                {
+                    "__typename": "CheckRun",
+                    "conclusion": "FAILURE",
+                    "status": "COMPLETED",
+                    "name": "py3.12 / ubuntu-latest",
+                    "workflowName": "CI",
+                }
+            ],
+        }
+
+        status, _state, _head_ref = m.check_pr_status(pr_data)
+        assert status == "ci_failed"
+
+    def test_pr_91_actual_rollup_returns_ok(self) -> None:
+        """Issue #92 回帰: PR #91 で観測した実 JSON で 'ok' を返す。
+
+        本テストは Issue #92 で報告されたバグ（GitHub Actions 環境の
+        全 PR で make merge-pr が CI fail と誤判定する）の回帰防止のため、
+        実際の ``gh pr view 91 --json statusCheckRollup`` 出力をそのまま
+        fixture として使う。
+        """
+        m = _import_merge_pr()
+
+        pr_data = {
+            "state": "OPEN",
+            "mergeable": "MERGEABLE",
+            "headRefName": "feature/90-progress-docs",
+            "statusCheckRollup": [
+                {
+                    "__typename": "CheckRun",
+                    "completedAt": "2026-04-30T07:01:00Z",
+                    "conclusion": "SUCCESS",
+                    "detailsUrl": "https://github.com/gghatano/synth-pop-harada-2024/actions/runs/25151952761/job/73724392232",
+                    "name": "py3.12 / ubuntu-latest",
+                    "startedAt": "2026-04-30T06:59:06Z",
+                    "status": "COMPLETED",
+                    "workflowName": "CI",
+                }
+            ],
+        }
+
+        status, _state, _head_ref = m.check_pr_status(pr_data)
+        assert status == "ok"
