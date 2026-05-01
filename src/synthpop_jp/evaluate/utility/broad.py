@@ -174,6 +174,19 @@ def _correlation_ratio(num: np.ndarray, cat: np.ndarray) -> float:
     return float(np.sqrt(eta_squared))
 
 
+def _pair_correlation(a: str, b: str, columns: dict[str, np.ndarray]) -> float:
+    """属性ペア (a, b) の相関値を返す（対称）."""
+    a_num = a in _NUMERIC_ATTRIBUTES
+    b_num = b in _NUMERIC_ATTRIBUTES
+    if a_num and b_num:
+        return 1.0
+    if a_num:
+        return _correlation_ratio(columns[a], columns[b])
+    if b_num:
+        return _correlation_ratio(columns[b], columns[a])
+    return _cramers_v(columns[a], columns[b])
+
+
 def _build_correlation_matrix(
     columns: dict[str, np.ndarray],
     attrs: tuple[str, ...],
@@ -181,24 +194,15 @@ def _build_correlation_matrix(
     """属性ペアの相関を要素とする対称行列（n × n）を組み立てる.
 
     対角は 1.0、非対角は (連続,カテゴリ) → eta、(カテゴリ,カテゴリ) → V。
-    age を含む組合せは Correlation Ratio、それ以外は Cramér's V。
+    対称行列なので上三角のみ計算してミラーする（重複計算を避ける）。
     """
     n = len(attrs)
-    mat = np.zeros((n, n), dtype=np.float64)
-    for i, a in enumerate(attrs):
-        for j, b in enumerate(attrs):
-            if i == j:
-                mat[i, j] = 1.0
-                continue
-            if a in _NUMERIC_ATTRIBUTES and b in _NUMERIC_ATTRIBUTES:
-                # 同一の age と age はあり得ないし、age 以外の連続変数は無い
-                mat[i, j] = 1.0
-            elif a in _NUMERIC_ATTRIBUTES:
-                mat[i, j] = _correlation_ratio(columns[a], columns[b])
-            elif b in _NUMERIC_ATTRIBUTES:
-                mat[i, j] = _correlation_ratio(columns[b], columns[a])
-            else:
-                mat[i, j] = _cramers_v(columns[a], columns[b])
+    mat = np.eye(n, dtype=np.float64)
+    for i in range(n):
+        for j in range(i + 1, n):
+            v = _pair_correlation(attrs[i], attrs[j], columns)
+            mat[i, j] = v
+            mat[j, i] = v
     return mat
 
 
