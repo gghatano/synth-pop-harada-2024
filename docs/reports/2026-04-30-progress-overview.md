@@ -93,12 +93,12 @@ SA に乗せる遷移と目的関数を、Murata 2017 論文 §11〜§12 の仕�
 - `AgeSwapTransition`（同じ家族類型・性別の 2 人の年齢を交換、§12.2B）
 - `HybridTransition`（age-change と age-swap を確率混合、§12.2C 前半）
 - 動的 `p_change` スケジュール（反復進行に応じて混合率を線形に変化、§12.2C 後半）
-- extended objective 第 1 弾（family_type × sex pyramid を 10 統計追加）
-- strict_extended モード（D, E 統計を除外、Murata 式(3) 準拠）
+- extended objective: family_type × sex pyramid を 18 統計追加（9 family_types × 2 sexes）
+- strict_extended モード（D, E 統計を除外、Murata 式(3) 準拠）。strict モードで A, B, C + F〜W = 3 + 18 = **Murata 2017 Table 13 の 21 統計と完全一致**（Issue #94 で確定、対応表は spec §11.3.2）
 - 初期生成の F-W 統計誤差 0 化（決定論的 Largest Remainder で開始時点の誤差を 0 に）
 - family_type × role × sex 分布の年齢サンプリング保証テスト
 
-残っているのは extended objective の 21 統計フル対応と 9 family types フル対応です。
+Phase 3a の主要要件は達成済み。21 統計フル対応も Issue #94 の確認で完了扱いになりました。
 
 ### Phase 3.5（評価器骨格）— 完了
 
@@ -165,7 +165,7 @@ SA に乗せる遷移と目的関数を、Murata 2017 論文 §11〜§12 の仕�
 
 ### Phase 3a の残り
 
-- **extended objective の 21 統計フル対応**: 現状 5+10 = 15 統計まで。残り 6 統計（spec §11.3 の式定義）。Issue #94 で論点提起中（Murata 2017 の Table 13 enumeration が必要）
+- ~~**extended objective の 21 統計フル対応**~~ → **完了**（2026-05-01、Issue #94）。Table 13 確認の結果、本実装は `strict_extended` モード（`exclude_male_female_pyramid=True`）で A, B, C + F〜W = 3 + 18 = 21 統計と完全一致していた。「残り 6 統計」は 5 family_types を仮定した古い数え方の誤り。対応表は [`docs/spec/spec.md`](../spec/spec.md) §11.3.2 を参照
 - ~~**9 family types フル対応**~~ → **完了**（2026-04-30、Issue #95）。`data/sample_case/` は 9 family_types すべてを含み、`tests/init/test_nine_family_types_coverage.py` で生成・SA 経路で全 9 種が出現することを保証。SA 収束記録は [`experiments/2026-04-30-9-family-types-coverage/report.md`](../../experiments/2026-04-30-9-family-types-coverage/report.md) を参照
 
 ### Phase 4 以降（構想中）

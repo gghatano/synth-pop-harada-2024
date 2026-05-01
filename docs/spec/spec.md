@@ -298,6 +298,87 @@ CONTRIBUTING.md に「新 family_type を足す 10 行の例」「新評価器�
 
 family type 別 demographic pyramid まで拡張し、Murata 2017 の 21 統計に対応させる。
 
+#### 11.3.1 Murata 2017 Table 13 の 21 統計
+
+Murata 2017 §5 / Table 13 は 21 統計を A, B, C, F〜W のラベルで列挙している（D, E は欠番で、§11.4.1 の式(3) でも除外される）。
+
+```
+Table 13: Average errors in each statistics (1,000 and 16,000 evaluations/agent).
+                  1,000              16,000
+Statistics   Change   Swap     Change   Swap
+A)             1.8   1361.0      0.0     2.6
+B)            21.6   2422.4      1.6    16.2
+C)             8.8   1170.6      1.8     7.6
+F)             0.0      0.0      0.0     0.0
+G)             0.0      0.0      0.0     0.0
+H)             0.4      0.0      0.2     0.0
+I)             0.2      0.0      0.0     0.0
+J)            86.0      0.0     11.4     0.0
+K)             4.6      0.0      1.0     0.0
+L)             0.0      0.0      0.0     0.0
+M)             0.0      0.0      0.2     0.0
+N)             5.2      0.0      2.2     0.0
+O)             0.0      0.0      0.0     0.0
+P)             8.8      0.0      3.8     0.0
+Q)             4.2      0.0      0.6     0.0
+R)             5.4      0.0      1.0     0.0
+S)             3.8      0.0      0.8     0.0
+T)           322.4      0.0    128.0     0.0
+U)            11.0      0.0      6.4     0.0
+V)             5.2      0.0      1.6     0.0
+W)             1.6      0.0      0.2     0.0
+```
+
+#### 11.3.2 21 統計と本実装 ``stats[i]`` の対応
+
+合計 21 = 3（A, B, C） + 18（F〜W、F G H I J K L M N O P Q R S T U V W の 18 文字）。
+
+- **A, B, C**（3 stats）: 関係統計。Swap で誤差が増える（age-swap が age-difference を破壊する）
+- **D, E**（2 stats、欠番）: 男女別人口ピラミッド。式(3) では除外
+- **F〜W**（18 stats）: family_type × sex の demographic pyramid。Swap は同 (family_type, sex) 内交換なのでこの統計を変えない
+
+本実装の ``build_objective_stats`` は以下のように対応する:
+
+| Murata ラベル | 本実装 ``stats[i]`` | 内容 |
+|---|---|---|
+| A | ``stats[0]`` | father-child age difference |
+| B | ``stats[1]`` | mother-child age difference |
+| C | ``stats[2]`` | husband-wife age difference (couple) |
+| D | ``stats[3]`` | male demographic pyramid（``exclude_male_female_pyramid=True`` で除外） |
+| E | ``stats[4]`` | female demographic pyramid（同上で除外） |
+| F〜W | ``stats[5..22]`` | family_type × sex pyramid（9 family_types × 2 sexes = 18） |
+
+``ObjectiveConfig.exclude_male_female_pyramid=True``（strict_extended モード、Issue #76）で D, E を除外すると、合計 3 + 18 = 21 となり Murata 2017 と完全一致する。
+
+##### F〜W の具体的な (family_type, sex) 割当
+
+本実装では family_type 登録 ID 順 × sex (M, F) 順で 18 stats を並べる。``build_objective_stats(use_family_type_pyramid=True)`` の出力順:
+
+```
+stats[5]  = F : family_reg.id_of("single")                          × M
+stats[6]  = G : family_reg.id_of("single")                          × F
+stats[7]  = H : family_reg.id_of("couple")                          × M
+stats[8]  = I : family_reg.id_of("couple")                          × F
+stats[9]  = J : family_reg.id_of("couple_and_children")             × M
+stats[10] = K : family_reg.id_of("couple_and_children")             × F
+stats[11] = L : family_reg.id_of("father_and_children")             × M
+stats[12] = M : family_reg.id_of("father_and_children")             × F
+stats[13] = N : family_reg.id_of("mother_and_children")             × M
+stats[14] = O : family_reg.id_of("mother_and_children")             × F
+stats[15] = P : family_reg.id_of("couple_and_parents")              × M
+stats[16] = Q : family_reg.id_of("couple_and_parents")              × F
+stats[17] = R : family_reg.id_of("couple_and_a_parent")             × M
+stats[18] = S : family_reg.id_of("couple_and_a_parent")             × F
+stats[19] = T : family_reg.id_of("couple_children_and_parents")     × M
+stats[20] = U : family_reg.id_of("couple_children_and_parents")     × F
+stats[21] = V : family_reg.id_of("couple_children_and_a_parent")    × M
+stats[22] = W : family_reg.id_of("couple_children_and_a_parent")    × F
+```
+
+family_type 登録順は CSV の出現順（``family_type_counts.csv`` の行順）に従う。``data/sample_case/family_type_counts.csv`` がこの順で並んでいる。Murata 2017 と直接 Table 13 の数値を比較する場合は、CSV の並びがこの順序と一致していることを確認すること（Issue #94 の論点で確定済み）。
+
+> **注**: Table 13 の F〜W の各文字とどの family_type が対応するかは Murata 2017 paper 本文では明記されていないため、上記割当は本実装の慣習である。値の挙動（J / T が大きい等）は Murata の値と整合する（J = couple_and_children M、T = couple_children_and_parents M はいずれも子どもを含む大世帯で初期生成からのずれが大きい）。
+
 ### 11.4 式（原論文準拠モード / 研究拡張モード）
 
 #### 11.4.1 原論文準拠モード（primary）
