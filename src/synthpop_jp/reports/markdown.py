@@ -71,59 +71,66 @@ def _render_family_type_pyramid(rows: dict[str, dict[str, float]]) -> list[str]:
     return lines
 
 
+def _render_kv_table(rows: dict[str, float]) -> list[str]:
+    """``{指標: 値}`` を 2 列 Markdown table に整形."""
+    if not rows:
+        return []
+    out = ["| 指標 | 値 |", "|---|---:|"]
+    out.extend(f"| {k} | {_format_value(rows[k])} |" for k in sorted(rows.keys()))
+    out.append("")
+    return out
+
+
+def _render_per_ft_table(
+    per_ft: dict[str, dict[str, float]],
+    columns: tuple[str, ...],
+    caption: str,
+) -> list[str]:
+    """family_type × 指標 のクロス表を整形（rare_cell / cap で共通）."""
+    if not per_ft:
+        return []
+    out = [f"**{caption}:**", ""]
+    header = " | ".join(("family_type", *columns))
+    sep = " | ".join(("---", *(["---:"] * len(columns))))
+    out.append(f"| {header} |")
+    out.append(f"| {sep} |")
+    for ft in sorted(per_ft.keys()):
+        sub = per_ft[ft]
+        cells = " | ".join(_format_value(sub.get(c, 0.0)) for c in columns)
+        out.append(f"| {ft} | {cells} |")
+    out.append("")
+    return out
+
+
 def _render_rare_cell(
     global_rows: dict[str, float], per_ft: dict[str, dict[str, float]]
 ) -> list[str]:
-    lines: list[str] = []
     if not global_rows and not per_ft:
-        return lines
-    lines.append("### 2.1 rare cell (proxy)")
-    lines.append("")
-    if global_rows:
-        lines.append("| 指標 | 値 |")
-        lines.append("|---|---:|")
-        for k in sorted(global_rows.keys()):
-            lines.append(f"| {k} | {_format_value(global_rows[k])} |")
-        lines.append("")
-    if per_ft:
-        lines.append("**family_type 別 (fraction_below_5 / fraction_unique):**")
-        lines.append("")
-        lines.append("| family_type | fraction_below_5 | fraction_unique |")
-        lines.append("|---|---:|---:|")
-        for ft in sorted(per_ft.keys()):
-            sub = per_ft[ft]
-            lines.append(
-                f"| {ft} | {_format_value(sub.get('fraction_below_5', 0.0))} | "
-                f"{_format_value(sub.get('fraction_unique', 0.0))} |"
-            )
-        lines.append("")
+        return []
+    lines = ["### 2.1 rare cell (proxy)", ""]
+    lines.extend(_render_kv_table(global_rows))
+    lines.extend(
+        _render_per_ft_table(
+            per_ft,
+            ("fraction_below_5", "fraction_unique"),
+            "family_type 別 (fraction_below_5 / fraction_unique)",
+        )
+    )
     return lines
 
 
 def _render_cap(global_rows: dict[str, float], per_ft: dict[str, dict[str, float]]) -> list[str]:
-    lines: list[str] = []
     if not global_rows and not per_ft:
-        return lines
-    lines.append("### 2.2 CAP / TCAP (attribute inference)")
-    lines.append("")
-    if global_rows:
-        lines.append("| 指標 | 値 |")
-        lines.append("|---|---:|")
-        for k in sorted(global_rows.keys()):
-            lines.append(f"| {k} | {_format_value(global_rows[k])} |")
-        lines.append("")
-    if per_ft:
-        lines.append("**family_type 別 (generalized / targeted):**")
-        lines.append("")
-        lines.append("| family_type | generalized | targeted |")
-        lines.append("|---|---:|---:|")
-        for ft in sorted(per_ft.keys()):
-            sub = per_ft[ft]
-            lines.append(
-                f"| {ft} | {_format_value(sub.get('generalized', 0.0))} | "
-                f"{_format_value(sub.get('targeted', 0.0))} |"
-            )
-        lines.append("")
+        return []
+    lines = ["### 2.2 CAP / TCAP (attribute inference)", ""]
+    lines.extend(_render_kv_table(global_rows))
+    lines.extend(
+        _render_per_ft_table(
+            per_ft,
+            ("generalized", "targeted"),
+            "family_type 別 (generalized / targeted)",
+        )
+    )
     return lines
 
 

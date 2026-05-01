@@ -54,25 +54,43 @@ if TYPE_CHECKING:
     from synthpop_jp.optimize.state import PopulationArrays
 
 
-def _household_features(pop: PopulationArrays) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """各 person に household-level 特徴量（household_size, n_children）を broadcast する.
+class _HouseholdAggregates:
+    """``_household_features_full`` の戻り値を保持する小さい構造体."""
 
-    Returns
-    -------
-    household_size : np.ndarray
-        各 person の所属世帯のメンバー数。shape=(n_persons,)。
-    n_children : np.ndarray
-        各 person の所属世帯の child 数。shape=(n_persons,)。
-    family_type_per_household : np.ndarray
-        household_id 出現順での family_type 配列（Task B で使用）。
+    __slots__ = (
+        "child_count",
+        "ft_per_household",
+        "household_size_per_person",
+        "member_count",
+        "n_children_per_person",
+    )
+
+    def __init__(
+        self,
+        household_size_per_person: np.ndarray,
+        n_children_per_person: np.ndarray,
+        member_count: np.ndarray,
+        child_count: np.ndarray,
+        ft_per_household: np.ndarray,
+    ) -> None:
+        self.household_size_per_person = household_size_per_person
+        self.n_children_per_person = n_children_per_person
+        self.member_count = member_count
+        self.child_count = child_count
+        self.ft_per_household = ft_per_household
+
+
+def _household_aggregates(pop: PopulationArrays) -> _HouseholdAggregates:
+    """``pop`` から household 集計（メンバー数・child 数・family_type）を 1 度だけ計算.
+
+    Task A は household_size_per_person、Task B は member_count / child_count /
+    ft_per_household を使う。同じ集計を Task ごとに繰り返さないようまとめる。
     """
     n = pop.n_persons
     if n == 0:
-        return (
-            np.empty(0, dtype=np.int64),
-            np.empty(0, dtype=np.int64),
-            np.empty(0, dtype=np.int64),
-        )
+        empty_i64 = np.empty(0, dtype=np.int64)
+        return _HouseholdAggregates(empty_i64, empty_i64, empty_i64, empty_i64, empty_i64)
+
     hids = np.asarray(pop.household_id, dtype=np.int64)
     fts = np.asarray(pop.family_type, dtype=np.int64)
     roles = np.asarray(pop.role, dtype=np.int64)
@@ -80,10 +98,10 @@ def _household_features(pop: PopulationArrays) -> tuple[np.ndarray, np.ndarray, 
     try:
         child_role_id = pop.role_reg.id_of("child")
     except KeyError:
-        child_role_id = -1  # role に "child" 未登録なら 0 件扱い
+        child_role_id = -1
 
-    # household_id ごとにメンバー数と child 数を集計
-    unique_hids, inverse = np.unique(hids, return_inverse=True)
+    # household_id ごとに集計（unique は出現順を保つ）
+    unique_hids, first_idx, inverse = np.unique(hids, return_index=True, return_inverse=True)
     member_count = np.bincount(inverse, minlength=unique_hids.shape[0]).astype(np.int64)
     child_count = np.bincount(
         inverse,
@@ -91,20 +109,27 @@ def _household_features(pop: PopulationArrays) -> tuple[np.ndarray, np.ndarray, 
         minlength=unique_hids.shape[0],
     ).astype(np.int64)
 
-    # 各 person に broadcast
-    household_size_per_person = member_count[inverse]
-    n_children_per_person = child_count[inverse]
+    # household 単位の family_type は「各世帯で最初に現れた person」の family_type。
+    # np.unique(return_index=True) は unique_hids[k] が最初に現れた位置を返すので
+    # それを使って Python ループを排除する。
+    ft_per_household = fts[first_idx]
 
-    # household 単位の family_type（household_id ごとに最初に現れた値）
-    ft_per_household = np.empty(unique_hids.shape[0], dtype=np.int64)
-    seen = np.zeros(unique_hids.shape[0], dtype=bool)
-    for i in range(n):
-        h = int(inverse[i])
-        if not seen[h]:
-            ft_per_household[h] = int(fts[i])
-            seen[h] = True
+    return _HouseholdAggregates(
+        household_size_per_person=member_count[inverse],
+        n_children_per_person=child_count[inverse],
+        member_count=member_count,
+        child_count=child_count,
+        ft_per_household=ft_per_household,
+    )
 
-    return household_size_per_person, n_children_per_person, ft_per_household
+
+def _household_features(pop: PopulationArrays) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """後方互換ラッパー: ``(household_size_per_person, n_children_per_person, ft_per_household)``.
+
+    既存テストや外部コードのために残す。新規呼び出しは ``_household_aggregates`` を使うこと。
+    """
+    agg = _household_aggregates(pop)
+    return agg.household_size_per_person, agg.n_children_per_person, agg.ft_per_household
 
 
 def _features_task_a(pop: PopulationArrays) -> tuple[np.ndarray, np.ndarray]:
@@ -126,36 +151,13 @@ def _features_task_a(pop: PopulationArrays) -> tuple[np.ndarray, np.ndarray]:
 
 def _features_task_b(pop: PopulationArrays) -> tuple[np.ndarray, np.ndarray]:
     """Task B: features=[family_type, n_children], target=household_size（household 単位）."""
-    n = pop.n_persons
-    if n == 0:
+    if pop.n_persons == 0:
         return np.empty((0, 2), dtype=np.float64), np.empty(0, dtype=np.float64)
-    hids = np.asarray(pop.household_id, dtype=np.int64)
-    fts = np.asarray(pop.family_type, dtype=np.int64)
-    try:
-        child_role_id = pop.role_reg.id_of("child")
-    except KeyError:
-        child_role_id = -1
-    roles = np.asarray(pop.role, dtype=np.int64)
-
-    unique_hids, inverse = np.unique(hids, return_inverse=True)
-    member_count = np.bincount(inverse, minlength=unique_hids.shape[0]).astype(np.int64)
-    child_count = np.bincount(
-        inverse,
-        weights=(roles == child_role_id).astype(np.int64),
-        minlength=unique_hids.shape[0],
-    ).astype(np.int64)
-
-    # household 単位の family_type
-    ft_per_household = np.empty(unique_hids.shape[0], dtype=np.int64)
-    seen = np.zeros(unique_hids.shape[0], dtype=bool)
-    for i in range(n):
-        h = int(inverse[i])
-        if not seen[h]:
-            ft_per_household[h] = int(fts[i])
-            seen[h] = True
-
-    x = np.column_stack([ft_per_household.astype(np.float64), child_count.astype(np.float64)])
-    y = member_count.astype(np.float64)
+    agg = _household_aggregates(pop)
+    x = np.column_stack(
+        [agg.ft_per_household.astype(np.float64), agg.child_count.astype(np.float64)]
+    )
+    y = agg.member_count.astype(np.float64)
     return x, y
 
 
