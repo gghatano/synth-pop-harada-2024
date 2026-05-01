@@ -64,6 +64,52 @@ def _common_distance_matrix(synthetic: PopulationArrays, holdout: PopulationArra
     return gower_distance_matrix(x, y, is_numeric=list(_IS_NUMERIC))
 
 
+def _dcr_metrics(d: np.ndarray) -> dict[str, float]:
+    if d.size == 0:
+        return {"dcr.p05": 0.0, "dcr.p50": 0.0, "dcr.mean": 0.0}
+    nearest = d.min(axis=1)
+    return {
+        "dcr.p05": float(np.percentile(nearest, 5)),
+        "dcr.p50": float(np.percentile(nearest, 50)),
+        "dcr.mean": float(nearest.mean()),
+    }
+
+
+def _nndr_metrics(d: np.ndarray) -> dict[str, float]:
+    if d.size == 0 or d.shape[1] < 2:
+        return {"nndr.p05": 0.0, "nndr.p50": 0.0, "nndr.mean": 0.0}
+    sorted_d = np.sort(d, axis=1)
+    nearest = sorted_d[:, 0]
+    second_nearest = sorted_d[:, 1]
+    with np.errstate(divide="ignore", invalid="ignore"):
+        ratio = np.where(second_nearest > 0, nearest / second_nearest, 0.0)
+    return {
+        "nndr.p05": float(np.percentile(ratio, 5)),
+        "nndr.p50": float(np.percentile(ratio, 50)),
+        "nndr.mean": float(ratio.mean()),
+    }
+
+
+def _ard_metrics(d: np.ndarray) -> dict[str, float]:
+    if d.size == 0:
+        return {"ard.mean": 0.0}
+    return {"ard.mean": float(d.mean())}
+
+
+def evaluate_distance_proxy_metrics(
+    synthetic: PopulationArrays,
+    holdout: PopulationArrays,
+) -> dict[str, float]:
+    """DCR / NNDR / ARD を共有 Gower 距離行列で **一度だけ** 計算する.
+
+    各評価器を独立に呼ぶと N×M Gower 距離行列を 3 回計算するが、本関数は
+    一度計算した行列を 3 つの集約関数で再利用する。CLI から呼ばれる
+    主入口（CLI で 1 回の計算で 3 指標が揃う）。
+    """
+    d = _common_distance_matrix(synthetic, holdout)
+    return {**_dcr_metrics(d), **_nndr_metrics(d), **_ard_metrics(d)}
+
+
 # ---------------------------------------------------------------------------
 # DCREvaluator
 # ---------------------------------------------------------------------------
@@ -88,23 +134,8 @@ class DCREvaluator:
         synthetic: PopulationArrays,
         holdout: PopulationArrays,
     ) -> dict[str, float]:
-        """各 synth レコードに対する real 集合での最近傍距離を集約する.
-
-        Returns
-        -------
-        dict[str, float]
-            ``dcr.p05`` / ``dcr.p50`` / ``dcr.mean``。
-            空人口は 0.0（中立値）。
-        """
-        if synthetic.n_persons == 0 or holdout.n_persons == 0:
-            return {"dcr.p05": 0.0, "dcr.p50": 0.0, "dcr.mean": 0.0}
-        d = _common_distance_matrix(synthetic, holdout)
-        nearest = d.min(axis=1)
-        return {
-            "dcr.p05": float(np.percentile(nearest, 5)),
-            "dcr.p50": float(np.percentile(nearest, 50)),
-            "dcr.mean": float(nearest.mean()),
-        }
+        """各 synth レコードに対する real 集合での最近傍距離を集約する."""
+        return _dcr_metrics(_common_distance_matrix(synthetic, holdout))
 
 
 # ---------------------------------------------------------------------------
@@ -130,19 +161,7 @@ class NNDREvaluator:
 
         分母（2 番目近傍距離）が 0 のときは 0 を返す（中立値）。
         """
-        if synthetic.n_persons == 0 or holdout.n_persons < 2:
-            return {"nndr.p05": 0.0, "nndr.p50": 0.0, "nndr.mean": 0.0}
-        d = _common_distance_matrix(synthetic, holdout)
-        sorted_d = np.sort(d, axis=1)
-        nearest = sorted_d[:, 0]
-        second_nearest = sorted_d[:, 1]
-        with np.errstate(divide="ignore", invalid="ignore"):
-            ratio = np.where(second_nearest > 0, nearest / second_nearest, 0.0)
-        return {
-            "nndr.p05": float(np.percentile(ratio, 5)),
-            "nndr.p50": float(np.percentile(ratio, 50)),
-            "nndr.mean": float(ratio.mean()),
-        }
+        return _nndr_metrics(_common_distance_matrix(synthetic, holdout))
 
 
 # ---------------------------------------------------------------------------
@@ -166,7 +185,4 @@ class ARDEvaluator:
         holdout: PopulationArrays,
     ) -> dict[str, float]:
         """Synth × real ペアの平均 Gower 距離を返す."""
-        if synthetic.n_persons == 0 or holdout.n_persons == 0:
-            return {"ard.mean": 0.0}
-        d = _common_distance_matrix(synthetic, holdout)
-        return {"ard.mean": float(d.mean())}
+        return _ard_metrics(_common_distance_matrix(synthetic, holdout))

@@ -775,14 +775,10 @@ def evaluate(
         metrics.update(narrow_evaluator.evaluate(arrays, holdout))
 
         # Issue #99: distance-based privacy metrics (DCR / NNDR / ARD)
-        from synthpop_jp.evaluate.privacy_metrics import (
-            ARDEvaluator,
-            DCREvaluator,
-            NNDREvaluator,
-        )
+        # 共有 Gower 距離行列で 1 度だけ計算する（3 評価器を独立に呼ぶと N×M を 3 回計算する）
+        from synthpop_jp.evaluate.privacy_metrics import evaluate_distance_proxy_metrics
 
-        for ev in (DCREvaluator(), NNDREvaluator(), ARDEvaluator()):
-            metrics.update(ev.evaluate(arrays, holdout))
+        metrics.update(evaluate_distance_proxy_metrics(arrays, holdout))
     else:
         console.print(
             "[yellow]--real-persons-csv 未指定のため CAP/TCAP・broad/narrow utility・"
