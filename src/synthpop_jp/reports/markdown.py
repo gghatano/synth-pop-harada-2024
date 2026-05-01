@@ -236,6 +236,20 @@ _CITATIONS: tuple[tuple[str, str], ...] = (
         "mia.",
         "Houssiau et al. (2022) 'TAPAS' / van Breugel et al. (2023) 'DOMIAS'（Phase 5 実装）",
     ),
+    (
+        "dcr.",
+        "Lampe & Knauer (2018) 'Synthetic Data Vault' 等で広く使われる距離 proxy "
+        "(Distance to Closest Record)",
+    ),
+    (
+        "nndr.",
+        "Platzer & Reutterer (2021) 'Holdout-Based Empirical Assessment of "
+        "Mixed-Type Synthetic Data' (NNDR)",
+    ),
+    (
+        "ard.",
+        "Harada 2024 §5.2 ARD (Average Record Distance, Gower 距離平均)",
+    ),
 )
 
 

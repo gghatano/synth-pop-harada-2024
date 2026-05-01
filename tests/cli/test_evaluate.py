@@ -173,6 +173,30 @@ class TestEvaluateIntegration:
                 assert f"narrow_utility.{task}.tstr_macro_f1" in metrics
                 assert f"narrow_utility.{task}.trts_macro_f1" in metrics
 
+    def test_evaluate_appends_dcr_nndr_ard_keys_with_real_persons_csv(self, tmp_path: Path) -> None:
+        """real-persons-csv 指定で dcr / nndr / ard キーが追記される (Issue #99)."""
+        config_path = _make_config_yaml(tmp_path)
+        runner.invoke(app, ["generate", "--config", str(config_path)])
+        synthetic_csv = tmp_path / "out" / "synthetic_persons.csv"
+        eval_result = runner.invoke(
+            app,
+            [
+                "evaluate",
+                "--config",
+                str(config_path),
+                "--real-persons-csv",
+                str(synthetic_csv),
+            ],
+        )
+        assert eval_result.exit_code == 0, eval_result.output
+        metrics = json.loads((tmp_path / "out" / "metrics.json").read_text(encoding="utf-8"))
+        assert "dcr.p05" in metrics
+        assert "dcr.mean" in metrics
+        assert "nndr.mean" in metrics
+        assert "ard.mean" in metrics
+        assert metrics["dcr.p05"] == 0.0
+        assert metrics["dcr.mean"] == 0.0
+
     def test_evaluate_skips_utility_without_real_persons_csv(self, tmp_path: Path) -> None:
         """real-persons-csv 未指定で utility キーが含まれない (#96, #97)."""
         config_path = _make_config_yaml(tmp_path)
