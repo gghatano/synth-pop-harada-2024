@@ -16,8 +16,9 @@ import pytest
 from scripts.audit_experiments import AuditReport, audit_directory, main
 
 
-def _write_input(path: Path, *, with_seed: bool = True, with_sha: bool = True,
-                 with_uv_lock: bool = True) -> None:
+def _write_input(
+    path: Path, *, with_seed: bool = True, with_sha: bool = True, with_uv_lock: bool = True
+) -> None:
     lines = ["# 入力データ", "", "テスト用 INPUT.md です。"]
     if with_seed:
         lines.append("seed: 42")
@@ -144,7 +145,7 @@ def test_main_returns_exit_code(tmp_path: Path, capsys: pytest.CaptureFixture[st
 
     rc = main([str(root)])
 
-    assert rc == 1   # bad has missing INPUT.md
+    assert rc == 1  # bad has missing INPUT.md
     out = capsys.readouterr().out
     assert "2026-05-04-good" in out
     assert "2026-05-04-bad" in out

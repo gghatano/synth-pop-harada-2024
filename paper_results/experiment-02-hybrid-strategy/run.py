@@ -47,7 +47,7 @@ def _run_grid(
     n_households: int,
     transitions: Iterable[str],
 ) -> list[RunResult]:
-    """seeds × transitions の格子点で run_one を回す."""
+    """Seeds × transitions の格子点で run_one を回す."""
     results: list[RunResult] = []
     for seed in seeds:
         for transition in transitions:
@@ -76,9 +76,7 @@ def _write_best_scores_csv(results: list[RunResult], path: Path) -> None:
         w = csv.writer(f)
         w.writerow(["seed", "transition", "evals_per_agent", "n_households", "best_score"])
         for r in results:
-            w.writerow(
-                [r.seed, r.transition_kind, r.evals_per_agent, r.n_households, r.best_score]
-            )
+            w.writerow([r.seed, r.transition_kind, r.evals_per_agent, r.n_households, r.best_score])
 
 
 def _output_dir(*, full: bool) -> Path:
@@ -94,7 +92,7 @@ def _config(*, full: bool) -> tuple[tuple[int, ...], int, int]:
 
 
 def _write_expected(*, full: bool) -> int:
-    """expected 系 CSV を上書きする."""
+    """Overwrite expected CSV files (``--write-expected`` モード)."""
     seeds, evals_per_agent, n_households = _config(full=full)
     out_dir = _output_dir(full=full)
     print(
@@ -113,7 +111,7 @@ def _write_expected(*, full: bool) -> int:
 
 
 def _check_tolerance(*, full: bool, summary_out: Path | None) -> int:
-    """expected との許容幅判定."""
+    """Compare actual output against expected by tolerance check."""
     seeds, evals_per_agent, n_households = _config(full=full)
     out_dir = _output_dir(full=full)
     if not (out_dir / "best_scores.csv").exists():

@@ -54,14 +54,13 @@ def _run_grid(
     n_households: int,
     transitions: Iterable[str],
 ) -> list[RunResult]:
-    """seeds × evals × transitions の格子点で run_one を回す."""
+    """Seeds × evals × transitions の格子点で run_one を回す."""
     results: list[RunResult] = []
     for seed in seeds:
         for evals_per_agent in evals:
             for transition in transitions:
                 print(
-                    f"[exp01] seed={seed} evals={evals_per_agent} "
-                    f"transition={transition} ...",
+                    f"[exp01] seed={seed} evals={evals_per_agent} transition={transition} ...",
                     flush=True,
                 )
                 r = run_one(
@@ -71,8 +70,7 @@ def _run_grid(
                     n_households=n_households,
                 )
                 print(
-                    f"[exp01]   best_score={r.best_score:.1f} "
-                    f"elapsed={r.elapsed_seconds:.2f}s",
+                    f"[exp01]   best_score={r.best_score:.1f} elapsed={r.elapsed_seconds:.2f}s",
                     flush=True,
                 )
                 results.append(r)
@@ -89,9 +87,7 @@ def _write_best_scores_csv(results: list[RunResult], path: Path) -> None:
         w = csv.writer(f)
         w.writerow(["seed", "transition", "evals_per_agent", "n_households", "best_score"])
         for r in results:
-            w.writerow(
-                [r.seed, r.transition_kind, r.evals_per_agent, r.n_households, r.best_score]
-            )
+            w.writerow([r.seed, r.transition_kind, r.evals_per_agent, r.n_households, r.best_score])
 
 
 def _write_stat_l1_csv(results: list[RunResult], path: Path) -> None:
@@ -121,7 +117,7 @@ def _config(*, full: bool) -> tuple[tuple[int, ...], tuple[int, ...], int]:
 
 
 def _write_expected(*, full: bool) -> int:
-    """expected 系 CSV を上書きする（``--write-expected`` モード）."""
+    """Overwrite expected CSV files (``--write-expected`` モード)."""
     seeds, evals, n_households = _config(full=full)
     out_dir = _output_dir(full=full)
     print(
@@ -141,7 +137,7 @@ def _write_expected(*, full: bool) -> int:
 
 
 def _check_tolerance(*, full: bool, summary_out: Path | None) -> int:
-    """tempdir に actual を書き出し、expected と許容幅判定で比較する."""
+    """Run the grid and compare actual output with expected by tolerance check."""
     seeds, evals, n_households = _config(full=full)
     out_dir = _output_dir(full=full)
     if not (out_dir / "best_scores.csv").exists():
