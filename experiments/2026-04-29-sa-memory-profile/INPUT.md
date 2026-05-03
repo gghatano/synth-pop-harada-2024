@@ -48,6 +48,8 @@ generate(target_n_households=100_000, target_dir=Path("/tmp/data_100k"))
 `run.py` の `--seeds` で指定し、各セルの config.yaml に渡される。
 本実験では {1, 2, 3} を使用（一部セルのみ seed×3）。
 
+seed: [1, 2, 3]
+
 ## データ規模
 
 | target_n_households | 生成 CSV 合計サイズ（推定） |
@@ -57,3 +59,9 @@ generate(target_n_households=100_000, target_dir=Path("/tmp/data_100k"))
 | 100,000 | ~100KB |
 
 入力 CSV 自体は小さく、git に commit しなくても tempdir で完結する。
+
+## 再現性の指紋（spec §19.3 / Issue #115）
+
+- seed: [1, 2, 3]
+- commit_sha: c3e4478 (本実験を追加したコミット、PR #54)
+- uv_lock_sha256: dda09efe4af1e31e4f985b2b8b513267f79cfc94dce3856e678347d8def8fa82
