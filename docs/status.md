@@ -72,6 +72,14 @@
 - `report.md` への出典・ライセンス自動埋め込み（DATASET.md ベース）
 - MIA 実装の事前登録ドキュメント（`docs/spec/mia_protocol.md`、shadow seed protocol）
 
+### 論文結果の固定再現（Issue #115）
+
+- `paper_results/experiment-01-age-change-vs-age-swap/` と `experiment-02-hybrid-strategy/` に Murata 2017 §15.1 / §15.2 の **CI 軽量設定**（n=3 / 100 世帯）の `expected/*.csv` を凍結
+- `make paper-results` で 1 コマンド再現（約 8 分）+ ±1% 許容幅判定
+- `make paper-results-full` で n=10 / 5 水準 / 1000 世帯のフル再現（`workflow_dispatch` 限定の重実験）
+- `.github/workflows/paper-results.yml` で PR / nightly に CI 実行
+- `make audit-experiments` で `experiments/` の再現性指紋（seed / SHA / uv.lock）を機械チェック
+
 ---
 
 ## 2. できていないこと（TODO / Backlog）
@@ -88,7 +96,8 @@
 - **改善ループ**: `improve/strategy.py` に rule_based / Pareto / random_search の骨格はあるが、multi-trial runner と best config 選択を実体化する必要あり
 - **MIA 実装**: 事前登録（`docs/spec/mia_protocol.md`）まで完了。TAPAS / DOMIAS の実装は shadow dataset 取得後に着手
 - **mkdocs サイトの GitHub Pages 公開**: build CI までは整備済み。デプロイ設定と既存 docs の repo-relative link を mkdocs 形式に直す作業が残る
-- **Murata 2017 再現結果の固定**: `paper_results/` を Makefile 経由で再現可能にする
+- **Murata 2017 実験 3 / 4**: 改善ループ（spec §14）実装後に `paper_results/experiment-03-...` / `experiment-04-...` を追加（実験 1 / 2 は #115 で完了）
+- **`paper_results/expected-full/`**: フル設定（n=10 / 5 水準 / 1000 世帯）の値固定はローカルでの 1〜2 時間 run が必要。`make paper-results-full` で生成可能
 - **Zenodo DOI 連携と CITATION.cff の DOI 記入**
 
 ---
