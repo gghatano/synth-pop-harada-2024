@@ -1,6 +1,7 @@
 {
-  "include": ["src", "tests", "scripts"],
+  "include": ["src", "tests", "scripts", "paper_results"],
   "exclude": ["**/__pycache__", ".venv", "outputs", "artifacts", "paper_results/tmp"],
+  "extraPaths": ["."],
   "pythonVersion": "3.12",
   "typeCheckingMode": "strict",
   "reportMissingTypeStubs": "warning",
@@ -49,6 +50,13 @@
     },
     {
       "root": "tests/domain",
+      "reportUnknownMemberType": "none",
+      "reportUnknownVariableType": "none",
+      "reportUnknownArgumentType": "none",
+      "reportArgumentType": "none"
+    },
+    {
+      "root": "tests/paper_results",
       "reportUnknownMemberType": "none",
       "reportUnknownVariableType": "none",
       "reportUnknownArgumentType": "none",
