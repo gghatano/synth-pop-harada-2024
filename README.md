@@ -2,8 +2,6 @@
 
 Murata et al. (2017) の Simulated Annealing ベース合成人口生成手法の Python 再実装に、Harada (2024) の有用性・秘匿性評価軸（ARD 等）と「生成→評価→改善」ループを載せた研究用ツールキット。
 
-[English README](./README.en.md)
-
 ---
 
 ## 1. 何ができるか（3 行）
@@ -93,7 +91,7 @@ uv run synthpop-jp quickstart --dry-run
 uv run synthpop-jp quickstart --log-level DEBUG
 ```
 
-e-Stat からの実データ取得は `scripts/fetch_estat.py`（Phase 2 以降で提供予定）を使ってユーザー環境でダウンロードしてください。詳細は `DATASET.md`。
+e-Stat からの実データ取得は `scripts/fetch_estat.py`（Phase 2 以降で提供予定）を使ってユーザー環境でダウンロードしてください。詳細は `docs/DATASET.md`。
 
 ---
 
@@ -140,57 +138,76 @@ e-Stat からの実データ取得は `scripts/fetch_estat.py`（Phase 2 以降�
 
 ---
 
-## 8. 実験結果と進捗レポート
+## 8. 現状と次の作業
 
-「いま何が動いて、何が分かっているか」をまとめたドキュメント群です。初めて触る人や久しぶりに戻ってきた人は、最初の 2 本（オーバービューと使い方ガイド）を読むと現在地と使い方が把握できます。
-
-### まず読むべき 2 本
+「いま何が動いて、何が動いていないか」と「次に何をすべきか」は **[`docs/status.md`](docs/status.md)** に集約しています。新しく触る人はまずここから読んでください。
 
 | ドキュメント | 内容 |
 |---|---|
-| [`docs/reports/2026-04-30-progress-overview.md`](docs/reports/2026-04-30-progress-overview.md) | Phase 1〜3 の到達点・主要な数値・残課題を 1 枚に統合した進捗オーバービュー |
-| [`docs/guides/how-it-works.md`](docs/guides/how-it-works.md) | SA・遷移・目的関数・評価器・compare runner・CLI の使い方を非技術者にも読める形で順に解説した読み物 |
-
-### 個別レポート（時系列のスナップショット）
-
-| 時期 | レポート | 内容 |
-|---|---|---|
-| Phase 2 | [`docs/reports/phase-02-benchmarks.md`](docs/reports/phase-02-benchmarks.md) | SA 性能ベンチ（1,000 世帯 × 20 万反復が median 5.2 秒、目標を 5.8 倍上回る） |
-| Phase 3 中盤 | [`docs/reports/2026-04-29-phase3-handoff.md`](docs/reports/2026-04-29-phase3-handoff.md) | age-swap / aggregate L1 / rare cell 着地時点の引き継ぎ |
-| Phase 3 拡張 | [`docs/reports/2026-04-29-phase3-extended-summary.md`](docs/reports/2026-04-29-phase3-extended-summary.md) | hybrid 遷移・CAP/TCAP・extended objective までの方法論まとめ（応用可能性も議論） |
+| [`docs/status.md`](docs/status.md) | 現在の機能 / 性能 / Open Issue / 構想中の TODO を 1 枚に集約 |
+| [`docs/guides/how-it-works.md`](docs/guides/how-it-works.md) | SA・遷移・目的関数・評価器・compare runner・CLI の使い方を順に解説 |
+| [`docs/reports/phase-02-benchmarks.md`](docs/reports/phase-02-benchmarks.md) | SA 性能ベンチの実測値（1,000 世帯 × 20 万反復 = median 5.2 秒、目標を 5.8 倍上回る） |
 
 ### 実験記録
 
 | 日付 | 実験 | 何を確かめたか |
 |---|---|---|
-| 2026-04-25 | [`experiments/2026-04-25-quickstart-sample-case/`](experiments/2026-04-25-quickstart-sample-case/) | Phase 1 初期生成（100 世帯 / 266 人）と HTML レポートの動作確認 |
+| 2026-04-25 | [`experiments/2026-04-25-quickstart-sample-case/`](experiments/2026-04-25-quickstart-sample-case/) | 初期生成（100 世帯 / 266 人）と HTML レポートの動作確認 |
 | 2026-04-29 | [`experiments/2026-04-29-sa-memory-profile/`](experiments/2026-04-29-sa-memory-profile/) | SA の RAM 消費を 1k〜100k 世帯で実測（100k 世帯でも 358MB） |
 
-過去の実験は内容を書き換えず、新しい知見は日付付きで「追記（時系列）」セクションに足していく運用です。
+過去の実験は内容を書き換えず、新しい知見は日付付きで `experiments/<日付>-<slug>/` に追加する運用です。
 
 ---
 
 ## 9. ロードマップ（要約）
 
-- **v0.1 (alpha)** — Phase 2 完了時点。`synthpop-jp quickstart` が 10 秒で動く。sample_case ダミー、age-change のみ、日英 README、LICENSE、CITATION.cff、CI 整備済
-- **v0.2** — Phase 4 完了時点。age-swap / hybrid、ARD を含む評価、e-Stat adapter、mkdocs サイト、3 本の notebook チュートリアル、SDV 比較表
-- **v0.3** — Phase 5 完了時点。改善ループ（rule_based / Pareto）、複数 trial、比較レポート自動生成、plugin entry_points 公開
+- **v0.1 (alpha)** — `synthpop-jp quickstart` が 10 秒で動く。決定性・CLI・初期生成・SA 差分更新が揃った時点
+- **v0.2** — 評価 3 層（broad / narrow utility、CAP/TCAP、DCR/NNDR/ARD）と compare runner、mkdocs サイトが揃う
+- **v0.3** — 改善ループ（rule_based / Pareto）、e-Stat 実データ adapter、複数 trial、plugin entry_points 公開
 - **v1.0** — 論文公開と同時。Murata 2017 再現結果を `paper_results/` に固定、Zenodo DOI、CITATION.cff 更新、英語ドキュメント完備
 
-### 2026-04-30 時点の到達状況
-
-- **Phase 1**: 完了（初期生成・I/O・決定性・CLI quickstart / validate-config）
-- **Phase 2**: 完了（SA MVP・差分更新・HTML レポート・性能ゲート達成）
-- **Phase 3a**: 主要要件達成（age-swap / hybrid 遷移、extended / strict_extended objective、初期誤差 0 化、family_type × role × sex サンプリング保証）。残: extended objective 21 統計フル対応、9 family types フル対応
-- **Phase 3.5**: 完了（aggregate L1 / rare cell / CAP/TCAP の 3 評価器、entry_points プラグイン、Table 13 形式 report.md）
-- **Phase 3b**: 完了（`compare` サブコマンド、Welch / Wilcoxon + Holm 補正、bootstrap CI）
-- **次のターゲット**: Phase 4（e-Stat 実データ adapter、mkdocs サイト、ARD 評価）
-
-詳細は [`docs/reports/2026-04-30-progress-overview.md`](docs/reports/2026-04-30-progress-overview.md)、[`docs/reviews/action-plan.md`](docs/reviews/action-plan.md) §3 および [`docs/spec/spec.md`](docs/spec/spec.md) §16 を参照してください。
+直近の到達点と残タスクは [`docs/status.md`](docs/status.md)、設計判断の経緯は [`docs/reviews/action-plan.md`](docs/reviews/action-plan.md)、仕様詳細は [`docs/spec/spec.md`](docs/spec/spec.md) を参照してください。
 
 ---
 
-## 10. コントリビューション
+## 10. リポジトリ構成
+
+論文の検証実験リポジトリとして、「仕様 → 実装 → データ → 再現 → 検証」を 1 ディレクトリずつに分けています。各ディレクトリには `README.md` を置いてあり、中身の意味と扱い方が分かるようにしてあります。
+
+```
+.
+├── src/                  # 実装本体（Python パッケージ synthpop_jp）
+├── tests/                # テストスイート（src/ と対応する構成）
+├── docs/                 # 仕様・ガイド・ルール・ADR・レポート（mkdocs サイト docs_dir）
+├── experiments/          # 仮説 → 実測の記録（再現スクリプト + report.md）
+├── data/                 # 入力データ（同梱の合成ダミーのみ。実データは含めない）
+├── configs/              # synthpop-jp が読む YAML 設定
+├── scripts/              # 開発・運用補助スクリプト（merge_pr / cadence / pm_status など）
+└── (root files)          # GitHub 規約・ビルド設定（下記参照）
+```
+
+各ディレクトリの内容は配下の `README.md` を参照してください。
+
+### ルートに置く必要があるファイル
+
+GitHub の表示・ビルドツール・Claude Code の慣習に固定されているため、ルートに置きます。
+
+| ファイル | 意味 |
+|---|---|
+| `README.md` | プロジェクト紹介（GitHub が自動表示） |
+| `LICENSE` / `NOTICE` | Apache-2.0 本文と依存ライブラリのクレジット |
+| `CITATION.cff` | GitHub の "Cite this repository" ボタンが参照 |
+| `CHANGELOG.md` | Keep a Changelog 形式の変更履歴 |
+| `CODE_OF_CONDUCT.md` / `CONTRIBUTING.md` | GitHub Community Standards |
+| `CLAUDE.md` | Claude Code が最初に読む開発ガイド |
+| `pyproject.toml` / `uv.lock` | パッケージ定義と依存ロック |
+| `Makefile` | `make ci` / `make pm` / `make merge-pr PR=N` などの開発ワークフロー |
+| `mkdocs.yml` | mkdocs サイトのビルド設定 |
+| `pyrightconfig.json` / `.pre-commit-config.yaml` / `.gitignore` | 型チェック・hook・ignore 設定 |
+
+---
+
+## 11. コントリビューション
 
 歓迎します。開発環境のセットアップ、Issue 駆動フロー、ブランチ / worktree 配置規約、新 family_type / 評価器の追加手順は [`CONTRIBUTING.md`](CONTRIBUTING.md) にまとめています。
 
@@ -198,8 +215,8 @@ e-Stat からの実データ取得は `scripts/fetch_estat.py`（Phase 2 以降�
 
 ---
 
-## 11. ライセンス
+## 12. ライセンス
 
 [Apache License 2.0](LICENSE)。依存ライブラリのクレジット骨子は [`NOTICE`](NOTICE) を参照（Phase 1 で `uv.lock` から自動生成に更新）。
 
-データの取り扱い（e-Stat 再配布ポリシー、合成ダミーの扱い、統計法 §44 への対応）は [`DATASET.md`](DATASET.md) を参照してください。
+データの取り扱い（e-Stat 再配布ポリシー、合成ダミーの扱い、統計法 §44 への対応）は [`docs/DATASET.md`](docs/DATASET.md) を参照してください。
