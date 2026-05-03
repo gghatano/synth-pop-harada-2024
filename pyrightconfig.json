@@ -61,6 +61,14 @@
       "reportUnknownVariableType": "none",
       "reportUnknownArgumentType": "none",
       "reportArgumentType": "none"
+    },
+    {
+      "root": "paper_results",
+      "reportUnknownMemberType": "none",
+      "reportUnknownVariableType": "none",
+      "reportUnknownArgumentType": "none",
+      "reportArgumentType": "none",
+      "reportMissingTypeStubs": "none"
     }
   ]
 }
