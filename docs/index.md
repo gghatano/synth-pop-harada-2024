@@ -12,7 +12,7 @@ Murata 2017 系の **合成人口生成** と Harada 2024 系の **評価軸** �
 
 1. **[開始ガイド](getting-started/development-workflow.md)**: 開発フロー全体
 2. **[手法と使い方](guides/how-it-works.md)**: SA / 遷移 / 目的関数 / 評価器の解説
-3. **[進捗オーバービュー](reports/2026-04-30-progress-overview.md)**: 現状の到達点
+3. **[現状サマリ](status.md)**: できていること / できていないこと（TODO/backlog）
 
 ## 開発に参加する
 
@@ -25,6 +25,3 @@ Murata 2017 系の **合成人口生成** と Harada 2024 系の **評価軸** �
 - [MIA Protocol](spec/mia_protocol.md) — Phase 5 実装の事前登録
 - [実験レポート形式](spec/experiment_report_format.md) — 実験記録のスキーマ
 
-## English
-
-[Home (EN)](index.en.md) を参照してください。

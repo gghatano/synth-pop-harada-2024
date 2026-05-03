@@ -5,7 +5,7 @@
 専門用語が初めて登場する箇所では、一言の補足を必ず添えています。深く知りたい場合は各セクションのリンク先（spec / 個別レポート）に進んでください。
 
 最初に読むべき関連ドキュメント:
-- 現在地と Phase ごとの実績は [`docs/reports/2026-04-30-progress-overview.md`](../reports/2026-04-30-progress-overview.md)
+- 現在できていること / 残っているタスクは [`docs/status.md`](../status.md)
 - インストールと最短実行は [`README.md`](../../README.md) §3〜§4
 
 ---
@@ -297,7 +297,6 @@ annealing:
 |---|---|
 | 性能はどれくらい出るか | [`docs/reports/phase-02-benchmarks.md`](../reports/phase-02-benchmarks.md) |
 | メモリ消費はどうか | [`experiments/2026-04-29-sa-memory-profile/report.md`](../../experiments/2026-04-29-sa-memory-profile/report.md) |
-| Phase 3 拡張の方法論 | [`docs/reports/2026-04-29-phase3-extended-summary.md`](../reports/2026-04-29-phase3-extended-summary.md) |
 
 ### 自分で実装に手を入れたい
 
@@ -317,7 +316,7 @@ annealing:
 ## 10. このドキュメントの位置付け
 
 - **本ガイド (`how-it-works.md`)**: 「読みながら手元で動かして覚える」目的の読み物
-- **進捗オーバービュー** ([`docs/reports/2026-04-30-progress-overview.md`](../reports/2026-04-30-progress-overview.md)): 「現在地・実績・残課題」の 1 枚要約
-- **個別レポート** (`docs/reports/*.md`、`experiments/*/report.md`): その時点のスナップショット。書き換えず追記する
+- **現状サマリ** ([`docs/status.md`](../status.md)): 「できていること・できていないこと」の最新スナップショット
+- **個別レポート** (`docs/reports/*.md`、`experiments/*/report.md`): 性能ベンチや実験記録など、書き換えず追記するスナップショット
 
 仕組みや CLI の挙動が変わったら、本ガイドも更新します。

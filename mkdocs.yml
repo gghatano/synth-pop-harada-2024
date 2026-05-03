@@ -33,14 +33,11 @@ theme:
 # 既存 docs/ ディレクトリ全体を docs_dir として使う。
 # nav は Issue #102 v0.2 として最小構成: トップページ + 主要セクションのインデックス。
 nav:
-  - Home (JA): index.md
-  - Home (EN): index.en.md
+  - Home: index.md
   - 開始ガイド: getting-started/development-workflow.md
   - 手法と使い方: guides/how-it-works.md
-  - How it works (EN): guides/how-it-works.en.md
-  - 進捗オーバービュー: reports/2026-04-30-progress-overview.md
-  - Phase 3 拡張まとめ: reports/2026-04-29-phase3-extended-summary.md
-  - Phase 2 ベンチマーク: reports/phase-02-benchmarks.md
+  - 現状サマリ: status.md
+  - 性能ベンチマーク: reports/phase-02-benchmarks.md
   - 仕様 (spec): spec/spec.md
   - 評価指標: spec/metrics.md
   - データ契約: spec/data_contract.md
