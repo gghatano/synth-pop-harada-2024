@@ -240,3 +240,94 @@ class RuleBasedStrategy:
 
 
 RuleName = Literal["large_parent_child_l1", "high_unique_rate", "slow_convergence"]
+
+
+# Pareto 戦略のジッタ既定値（non-dominated config 周辺の探索幅）
+PARETO_JITTER_P_CHANGE = 0.1
+PARETO_JITTER_ALPHA = 0.005
+PARETO_JITTER_EVALS_FRAC = 0.2  # evals_per_agent の ±20% でジッタ
+
+
+# 3 目的のスコアキー（小さいほど良い前提）
+PARETO_OBJECTIVE_KEYS: tuple[str, str, str] = (
+    "statistical_fit",
+    "utility",
+    "privacy",
+)
+
+
+class ParetoStrategy:
+    """spec §14.4 の 3 目的 non-dominated set ベース改善戦略.
+
+    動作:
+
+    1. ``history`` が空 → :class:`RandomSearchStrategy` 相当のランダム config
+    2. ``history`` から ``(statistical_fit, utility, privacy)`` の 3 次元点群を
+       作り、:func:`extract_non_dominated` で non-dominated set を抽出
+    3. non-dominated trial の中から **最も新しいもの** を選び、その config の
+       p_change / alpha / evals_per_agent に小さなジッタを乗せて返す
+       （transition_kind は継承）
+
+    Parameters
+    ----------
+    base_settings : Settings
+        ベース Settings。non-dominated trial が無いときの fallback config。
+    seed : int
+        ジッタ用乱数 seed。同一 seed × 同一 history で next_config が決定論的。
+    candidate_pool_size : int
+        将来拡張用（現実装では使わない）。
+    """
+
+    def __init__(
+        self,
+        base_settings: Settings,
+        *,
+        seed: int = 42,
+        candidate_pool_size: int = 20,
+    ) -> None:
+        del candidate_pool_size  # 将来拡張用、現実装では使わない
+        self._base = base_settings
+        self._rng = np.random.default_rng(seed)
+        # fallback 用の RandomSearchStrategy（同じ rng を共有しないよう独立 seed を派生）
+        self._fallback = RandomSearchStrategy(base_settings, seed=seed + 10_000)
+
+    def next_config(self, history: Sequence[TrialResult]) -> Settings:
+        """History を 3 目的空間に写像し non-dominated 近傍を返す."""
+        if not history:
+            return self._fallback.next_config(history)
+
+        # 3 目的の点群を作る（メトリクスが欠けていれば +inf 扱い → 必ず支配される）
+        points: list[tuple[float, ...]] = []
+        for tr in history:
+            triple = tuple(float(tr.metrics.get(k, float("inf"))) for k in PARETO_OBJECTIVE_KEYS)
+            points.append(triple)
+
+        from synthpop_jp.improve.pareto import extract_non_dominated
+
+        nd_indices = extract_non_dominated(points)
+        if not nd_indices:
+            return self._fallback.next_config(history)
+
+        # 最も新しい non-dominated trial を選ぶ（決定論的）
+        target_idx = max(nd_indices)
+        target = history[target_idx]
+        target_ann = target.config.annealing
+
+        # ジッタを乗せる（決定論的: self._rng 経由）
+        jitter_p = float(self._rng.uniform(-PARETO_JITTER_P_CHANGE, PARETO_JITTER_P_CHANGE))
+        jitter_a = float(self._rng.uniform(-PARETO_JITTER_ALPHA, PARETO_JITTER_ALPHA))
+        evals_base = target_ann.evals_per_agent
+        evals_lo = max(1, int(evals_base * (1.0 - PARETO_JITTER_EVALS_FRAC)))
+        evals_hi = max(evals_lo + 1, int(evals_base * (1.0 + PARETO_JITTER_EVALS_FRAC)))
+        new_evals = int(self._rng.integers(evals_lo, evals_hi + 1))
+
+        new_p_change = max(0.0, min(1.0, float(target_ann.p_change) + jitter_p))
+        new_alpha = max(1e-6, min(1.0, float(target_ann.alpha) + jitter_a))
+
+        return _apply_annealing_overrides(
+            self._base,
+            p_change=new_p_change,
+            evals_per_agent=new_evals,
+            alpha=new_alpha,
+            transition_kind=target_ann.transition_kind,
+        )

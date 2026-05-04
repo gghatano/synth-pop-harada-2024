@@ -15,11 +15,13 @@
 
 from __future__ import annotations
 
+from synthpop_jp.improve.pareto import extract_non_dominated, is_dominated
 from synthpop_jp.improve.runner import ImproveLoopResult, TrialResult
 from synthpop_jp.improve.strategy import (
     DEFAULT_PARAM_RANGES,
     DEFAULT_TRANSITION_CHOICES,
     ImproveStrategy,
+    ParetoStrategy,
     RandomSearchStrategy,
     RuleBasedStrategy,
 )
@@ -29,7 +31,10 @@ __all__ = [
     "DEFAULT_TRANSITION_CHOICES",
     "ImproveLoopResult",
     "ImproveStrategy",
+    "ParetoStrategy",
     "RandomSearchStrategy",
     "RuleBasedStrategy",
     "TrialResult",
+    "extract_non_dominated",
+    "is_dominated",
 ]
