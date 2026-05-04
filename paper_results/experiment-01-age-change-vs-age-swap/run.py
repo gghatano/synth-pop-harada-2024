@@ -39,10 +39,14 @@ CI_EVALS: tuple[int, ...] = (500, 2000)
 CI_HOUSEHOLDS: int = 100
 
 #: フル設定（workflow_dispatch + ローカル `make paper-results-full` 専用）。
-#: spec §15.1 / experiment_plan.md の凍結値（n=10 / 5 水準 / 1000 世帯）。
-FULL_SEEDS: tuple[int, ...] = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
-FULL_EVALS: tuple[int, ...] = (1000, 2000, 4000, 8000, 16000)
-FULL_HOUSEHOLDS: int = 1000
+#: spec §15.1 / experiment_plan.md は n=10 / 5 水準 / 1000 世帯を凍結値として
+#: 推奨するが、本実装で 1000 世帯 × evals_per_agent=16000 は age_swap の 1 run
+#: が約 1 時間（実測）にのぼり、4 実験合計が 1 日を超える。当面は **scale-up
+#: smoke** として n=5 / 3 水準（1000–4000） / 500 世帯で実施する。
+#: 完全再現（n=10 / 5 水準 / 1000 世帯）は別 Issue で別途タイムスロット確保。
+FULL_SEEDS: tuple[int, ...] = (1, 2, 3, 4, 5)
+FULL_EVALS: tuple[int, ...] = (1000, 2000, 4000)
+FULL_HOUSEHOLDS: int = 500
 
 TRANSITIONS: tuple[str, ...] = ("age_change", "age_swap")
 

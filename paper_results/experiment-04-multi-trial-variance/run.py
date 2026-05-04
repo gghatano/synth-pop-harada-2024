@@ -37,11 +37,12 @@ CI_SEEDS: tuple[int, ...] = (1, 2, 3, 4, 5)
 CI_N_TRIALS: int = 5
 CI_HOUSEHOLDS: int = 100
 
-#: フル設定（spec §15.4 / experiment_plan.md 凍結値）。
-#: 10 seeds × n_trials=20 = 200 SA runs を 1000 世帯で回す。
-FULL_SEEDS: tuple[int, ...] = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
-FULL_N_TRIALS: int = 20
-FULL_HOUSEHOLDS: int = 1000
+#: フル設定（spec §15.4 / experiment_plan.md 推奨値の代わりに、当面は
+#: **scale-up smoke**（n=5 / n_trials=10 / 500 世帯）で実施する。論文値の
+#: 完全再現は別 Issue で別途タイムスロット確保（exp03 と同じ理由）。
+FULL_SEEDS: tuple[int, ...] = (1, 2, 3, 4, 5)
+FULL_N_TRIALS: int = 10
+FULL_HOUSEHOLDS: int = 500
 
 #: 戦略は rule_based 固定。
 STRATEGY: str = "rule_based"

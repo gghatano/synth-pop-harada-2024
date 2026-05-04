@@ -38,20 +38,22 @@ def _load_run_module() -> object:
 class TestExperiment03FullConstants:
     """フル設定の定数が宣言されている."""
 
-    def test_full_seeds_is_ten_seeds(self) -> None:
+    def test_full_seeds_is_five_seeds(self) -> None:
+        # scale-up smoke：n=10 → n=5（age_swap が 1000 世帯 × evals=16000 で
+        # 1 run 約 1 時間という実測のため、当面 5 seeds に縮める）
         m = _load_run_module()
         assert hasattr(m, "FULL_SEEDS")
-        assert tuple(m.FULL_SEEDS) == (1, 2, 3, 4, 5, 6, 7, 8, 9, 10)  # type: ignore[attr-defined]
+        assert tuple(m.FULL_SEEDS) == (1, 2, 3, 4, 5)  # type: ignore[attr-defined]
 
-    def test_full_n_trials_is_twenty(self) -> None:
+    def test_full_n_trials_is_ten(self) -> None:
         m = _load_run_module()
         assert hasattr(m, "FULL_N_TRIALS")
-        assert m.FULL_N_TRIALS == 20  # type: ignore[attr-defined]
+        assert m.FULL_N_TRIALS == 10  # type: ignore[attr-defined]
 
-    def test_full_households_is_thousand(self) -> None:
+    def test_full_households_is_five_hundred(self) -> None:
         m = _load_run_module()
         assert hasattr(m, "FULL_HOUSEHOLDS")
-        assert m.FULL_HOUSEHOLDS == 1000  # type: ignore[attr-defined]
+        assert m.FULL_HOUSEHOLDS == 500  # type: ignore[attr-defined]
 
     def test_ci_constants_unchanged(self) -> None:
         m = _load_run_module()

@@ -35,11 +35,14 @@ CI_SEEDS: tuple[int, ...] = (1, 2, 3)
 CI_N_TRIALS: int = 5
 CI_HOUSEHOLDS: int = 100
 
-#: フル設定（spec §15.3 / experiment_plan.md 凍結値）。
-#: 10 seeds × 3 戦略 × 20 trials = 600 SA runs を 1000 世帯で回す。
-FULL_SEEDS: tuple[int, ...] = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
-FULL_N_TRIALS: int = 20
-FULL_HOUSEHOLDS: int = 1000
+#: フル設定（spec §15.3 / experiment_plan.md 推奨値の代わりに、当面は
+#: **scale-up smoke**（n=5 / n_trials=10 / 500 世帯）で実施する。改善ループ
+#: の `evals_per_agent=200` は短いが、500 世帯 × 10 trials × 3 戦略 × 5 seed =
+#: 150 SA run になるため、CI 軽量設定の 3 倍強の計算量。論文値の完全再現
+#: （n=10 / n_trials=20 / 1000 世帯）は別 Issue で。
+FULL_SEEDS: tuple[int, ...] = (1, 2, 3, 4, 5)
+FULL_N_TRIALS: int = 10
+FULL_HOUSEHOLDS: int = 500
 
 #: 比較する 3 戦略。
 STRATEGIES: tuple[str, ...] = ("rule_based", "pareto", "random_search")
