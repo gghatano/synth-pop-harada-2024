@@ -101,10 +101,12 @@ class RunResult:
 # ---------------------------------------------------------------------------
 
 
-def _scale_sample_case(target_n_households: int, target_dir: Path) -> None:
+def scale_sample_case(target_n_households: int, target_dir: Path) -> None:
     """data/sample_case/ を整数倍スケールして target_dir に書き出す.
 
     実験 9-family-types-coverage と挙動を揃えるため scale は整数のみ。
+    paper_results 内の他モジュール（improve_runner 等）からも再利用するため
+    public API として公開する。
     """
     if target_n_households <= 0 or target_n_households % SAMPLE_CASE_HOUSEHOLDS != 0:
         msg = (
@@ -121,6 +123,10 @@ def _scale_sample_case(target_n_households: int, target_dir: Path) -> None:
         df.to_csv(target_dir / name, index=False)
     for name in COPY_CSVS:
         shutil.copy(SAMPLE_CASE_DIR / name, target_dir / name)
+
+
+# 後方互換用エイリアス（旧名 _scale_sample_case を参照する内部コードのため）。
+_scale_sample_case = scale_sample_case
 
 
 def _load_init_stats(input_dir: Path) -> InitStats:

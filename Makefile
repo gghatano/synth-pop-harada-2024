@@ -15,7 +15,8 @@
 .PHONY: help setup lint format type test bench quickstart docs paper pm all \
         paper-results paper-results-exp01 paper-results-exp02 \
         paper-results-exp03 paper-results-exp04 paper-results-write \
-        paper-results-full repro-experiments audit-experiments
+        paper-results-full paper-results-write-full \
+        repro-experiments audit-experiments
 
 help:
 	@echo "Available targets:"
@@ -86,8 +87,14 @@ paper-results-write:
 paper-results-full:
 	PYTHONPATH=. uv run python paper_results/experiment-01-age-change-vs-age-swap/run.py --full --check-tolerance
 	PYTHONPATH=. uv run python paper_results/experiment-02-hybrid-strategy/run.py --full --check-tolerance
-	PYTHONPATH=. uv run python paper_results/experiment-03-improve-strategy-comparison/run.py --check-tolerance
-	PYTHONPATH=. uv run python paper_results/experiment-04-multi-trial-variance/run.py --check-tolerance
+	PYTHONPATH=. uv run python paper_results/experiment-03-improve-strategy-comparison/run.py --full --check-tolerance
+	PYTHONPATH=. uv run python paper_results/experiment-04-multi-trial-variance/run.py --full --check-tolerance
+
+paper-results-write-full:
+	PYTHONPATH=. uv run python paper_results/experiment-01-age-change-vs-age-swap/run.py --full --write-expected
+	PYTHONPATH=. uv run python paper_results/experiment-02-hybrid-strategy/run.py --full --write-expected
+	PYTHONPATH=. uv run python paper_results/experiment-03-improve-strategy-comparison/run.py --full --write-expected
+	PYTHONPATH=. uv run python paper_results/experiment-04-multi-trial-variance/run.py --full --write-expected
 
 # 旧 paper: ターゲットの後方互換エイリアス。
 paper: paper-results
