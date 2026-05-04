@@ -1,0 +1,13 @@
+seed,transition,evals_per_agent,n_households,best_score
+1,age_change,500,100,453.0
+1,age_swap,500,100,567.0
+1,age_change,2000,100,453.0
+1,age_swap,2000,100,567.0
+2,age_change,500,100,455.0
+2,age_swap,500,100,570.0
+2,age_change,2000,100,455.0
+2,age_swap,2000,100,570.0
+3,age_change,500,100,453.0
+3,age_swap,500,100,568.0
+3,age_change,2000,100,453.0
+3,age_swap,2000,100,568.0

@@ -33,16 +33,19 @@
 - Wilcoxon signed-rank test（seed 対応あり）
 - Effect size: Cliff's δ
 
-### サンプルサイズ
+### サンプルサイズ（Issue #115 で確定）
 
-- seed n=10〜30（最終値は Phase 3 着手前に確定）
-- `evals_per_agent ∈ {1000, 2000, 4000, 8000, 16000}`
+- **CI 軽量設定**（`make paper-results`）: seed n=3、`evals_per_agent ∈ {500, 2000}`、世帯数 100。〜4 分以内に終わる退行検出用設定
+- **フル設定**（`make paper-results-full`、`workflow_dispatch` / ローカル限定）: seed n=10、`evals_per_agent ∈ {1000, 2000, 4000, 8000, 16000}`、世帯数 1000。Murata 2017 §15.1 と整合する論文値固定用
 
 ### 停止条件
 
-- `best_score <= target_threshold` または `max_iters` 到達
+- `max_iters = evals_per_agent × n_persons` の上限到達（実装上 `target_threshold=0.0` で early-stop は使わない）
 
-**Phase 3 着手前に埋める。**
+### 期待値の固定先
+
+- CI: `paper_results/experiment-01-age-change-vs-age-swap/expected/best_scores.csv` + `stat_l1.csv`
+- Full: 同ディレクトリの `expected-full/` 以下（本 Issue では未生成、後続で `--full --write-expected`）
 
 ## 実験 2（§15.2）: hybrid 戦略
 
@@ -59,11 +62,20 @@
 
 - Welch's t test + Holm 補正
 
-### サンプルサイズ
+### サンプルサイズ（Issue #115 で確定）
 
-- seed n=10〜30
+- **CI 軽量設定**: seed n=3、`evals_per_agent=2000` 固定、世帯数 100、戦略 = {age_change, age_swap, hybrid}（3 戦略 × 3 ペアの Welch + Holm）
+- **フル設定**: seed n=10、`evals_per_agent=4000` 固定、世帯数 1000
 
-**Phase 3 着手前に埋める。**
+### Hybrid のスケジュール
+
+- `LinearPChange(start=0.8, end=0.2)`（前半 age_change 厚め → 後半 age_swap 厚め）
+- 他スケジュール（constant 0.5、定数 0.2 → 0.8 reverse）は範囲外。後続 Issue で別実験として扱う
+
+### 期待値の固定先
+
+- CI: `paper_results/experiment-02-hybrid-strategy/expected/best_scores.csv`
+- Full: 同ディレクトリの `expected-full/`（本 Issue では未生成）
 
 ## 実験 3（§15.3）: 改善戦略比較（rule_based vs pareto vs random_search）
 
