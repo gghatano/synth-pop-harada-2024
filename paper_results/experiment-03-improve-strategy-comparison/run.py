@@ -22,7 +22,6 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import pandas as pd
-
 from paper_results._shared.improve_runner import run_improve_for_paper_results
 from paper_results._shared.tolerance_check import compare
 
@@ -50,7 +49,7 @@ def _run_grid(
     n_trials: int,
     output_root: Path,
 ) -> pd.DataFrame:
-    """seeds × strategies の格子点で improve loop を走らせ、結果を 1 つの DataFrame に."""
+    """Seeds × strategies の格子点で improve loop を走らせ、結果を 1 つの DataFrame に."""
     frames: list[pd.DataFrame] = []
     for seed in seeds:
         for strategy in strategies:
@@ -66,8 +65,7 @@ def _run_grid(
                 output_root=output_root,
             )
             print(
-                f"[exp03]   trials={len(df)} "
-                f"min_best_score={df['best_score'].min():.1f}",
+                f"[exp03]   trials={len(df)} min_best_score={df['best_score'].min():.1f}",
                 flush=True,
             )
             frames.append(df)
@@ -97,7 +95,7 @@ def _format_best_scores(all_trials: pd.DataFrame) -> pd.DataFrame:
             ],
         )
     # composite が最小の行を seed × strategy ごとに取る（同点なら trial_id 最小を採用）
-    sorted_df = all_trials.sort_values(["seed", "strategy", "composite", "trial_id"])
+    sorted_df = all_trials.sort_values(by=["seed", "strategy", "composite", "trial_id"])  # type: ignore[arg-type]
     best = sorted_df.groupby(["seed", "strategy"], as_index=False).first()
     out = best.rename(columns={"trial_id": "best_trial_id"})[
         [
@@ -111,7 +109,7 @@ def _format_best_scores(all_trials: pd.DataFrame) -> pd.DataFrame:
             "privacy_proxy",
         ]
     ]
-    return out.sort_values(["seed", "strategy"]).reset_index(drop=True)
+    return out.sort_values(by=["seed", "strategy"]).reset_index(drop=True)  # type: ignore[arg-type]
 
 
 def _format_strategy_metrics(best_df: pd.DataFrame) -> pd.DataFrame:
@@ -126,16 +124,13 @@ def _format_strategy_metrics(best_df: pd.DataFrame) -> pd.DataFrame:
                 "composite_mean",
             ],
         )
-    grouped = (
-        best_df.groupby("strategy", as_index=False)
-        .agg(
-            statistical_fit_mean=("statistical_fit", "mean"),
-            utility_proxy_mean=("utility_proxy", "mean"),
-            privacy_proxy_mean=("privacy_proxy", "mean"),
-            composite_mean=("composite", "mean"),
-        )
+    grouped = best_df.groupby("strategy", as_index=False).agg(
+        statistical_fit_mean=("statistical_fit", "mean"),
+        utility_proxy_mean=("utility_proxy", "mean"),
+        privacy_proxy_mean=("privacy_proxy", "mean"),
+        composite_mean=("composite", "mean"),
     )
-    return grouped.sort_values("strategy").reset_index(drop=True)
+    return grouped.sort_values(by="strategy").reset_index(drop=True)  # type: ignore[arg-type]
 
 
 def _round_for_stable_csv(df: pd.DataFrame) -> pd.DataFrame:
@@ -158,7 +153,7 @@ def _write_csv(df: pd.DataFrame, path: Path) -> None:
 
 
 def _output_dir() -> Path:
-    """expected CSV を置く場所."""
+    """Return the directory that holds expected CSVs."""
     return EXPERIMENT_DIR / "expected"
 
 
@@ -168,9 +163,7 @@ def _do_run(*, write: bool, summary_out: Path | None) -> int:
     expected_metrics = out_dir / "strategy_metrics.csv"
 
     if not write and not expected_best.exists():
-        msg = (
-            f"expected CSV not found: {expected_best}. Run with --write-expected first."
-        )
+        msg = f"expected CSV not found: {expected_best}. Run with --write-expected first."
         print(msg, file=sys.stderr)
         return 2
 

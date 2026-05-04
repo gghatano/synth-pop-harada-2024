@@ -154,10 +154,7 @@ def run_improve_for_paper_results(
         output_root=output_root.resolve(),
     )
 
-    rows = [
-        _trial_to_row(seed=seed, strategy_name=strategy_name, tr=tr)
-        for tr in result.history
-    ]
+    rows = [_trial_to_row(seed=seed, strategy_name=strategy_name, tr=tr) for tr in result.history]
     df = pd.DataFrame(rows)
     df = _attach_composite(df)
     return df

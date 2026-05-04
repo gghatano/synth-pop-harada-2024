@@ -1,6 +1,6 @@
 # paper_results — Murata 2017 再現結果の固定置き場
 
-このディレクトリは、Murata et al. (2017) の主要実験（spec §15.1 / §15.2）を **本実装で固定 seed × 固定設定で再現したときの数値** を、後から第三者が確認できるよう凍結保存しているフォルダです。
+このディレクトリは、Murata et al. (2017) の主要実験（spec §15.1 / §15.2）と、本実装独自の改善ループ評価（Issue #121）を **固定 seed × 固定設定で再現したときの数値** として、後から第三者が確認できるよう凍結保存しているフォルダです。
 
 ## 1. 何が固定されているか
 
@@ -9,10 +9,14 @@
 | 実験 1（age-change vs age-swap）の best_score | `experiment-01-age-change-vs-age-swap/expected/best_scores.csv` |
 | 実験 1 の 21 統計別 L1（副指標） | `experiment-01-age-change-vs-age-swap/expected/stat_l1.csv` |
 | 実験 2（hybrid 戦略）の best_score | `experiment-02-hybrid-strategy/expected/best_scores.csv` |
-| 実験 1 / 2 の入力条件・seed・コミット SHA | 各ディレクトリの `INPUT.md` |
-| 実験 1 / 2 の解釈と統計検定 | 各ディレクトリの `report.md` |
+| 実験 3（改善ループ 3 戦略比較）の seed × strategy ベスト trial | `experiment-03-improve-strategy-comparison/expected/best_scores.csv` |
+| 実験 3 の戦略別 seed 平均 | `experiment-03-improve-strategy-comparison/expected/strategy_metrics.csv` |
+| 実験 4（複数候補ばらつき）の 25 試行 4 指標 | `experiment-04-multi-trial-variance/expected/trial_metrics.csv` |
+| 実験 4 の指標別 CV + bootstrap 95% CI | `experiment-04-multi-trial-variance/expected/variance_summary.csv` |
+| 各実験の入力条件・seed・コミット SHA | 各ディレクトリの `INPUT.md` |
+| 各実験の解釈と統計検定 | 各ディレクトリの `report.md` |
 
-各 `expected/*.csv` は **CI 軽量設定**（n=3 seeds × 100 世帯 × evals_per_agent 2 水準。実験 2 は単一水準）の出力です。論文値の最終固定版は `expected-full/`（n=10 / 5 水準 / 1000 世帯）に置く設計ですが、本 Issue では空のままで、`make paper-results-full` を `workflow_dispatch` 経由で走らせて生成する想定です。
+各 `expected/*.csv` は **CI 軽量設定**（実験 1: n=3 seeds × 100 世帯 × evals 2 水準 / 実験 2: 同 1 水準 / 実験 3: 3 seeds × 3 戦略 × 5 trials × 100 世帯 / 実験 4: 5 seeds × 5 trials × 100 世帯）の出力です。論文値の最終固定版は `expected-full/`（実験 1 / 2 のみ、n=10 / 5 水準 / 1000 世帯）に置く設計で、`make paper-results-full` を `workflow_dispatch` 経由で走らせて生成します。
 
 ## 2. なぜ固定するか
 
@@ -24,9 +28,14 @@
 
 許容幅は spec §19.4 を一次根拠とし、`best_score` 系は ±1%、`utility` 系は ±5% で `paper_results/_shared/tolerance_check.py` が判定します。
 
-## 3. なぜ実験 3 / 4 が無いか
+## 3. 実験 3 / 4（改善ループ層、Issue #121 で追加）
 
-spec §15 は実験 1〜4 を定義していますが、本 Issue（#115）では 1 / 2 のみを扱います。理由は単純で、**実験 3（rule_based vs pareto）と実験 4（複数候補ばらつき）は改善ループ（spec §14）の実装が前提** で、改善ループはまだ未実装だからです。改善ループ実装後の後続 Issue で `paper_results/experiment-03-...` / `experiment-04-...` を追加する想定です。
+spec §15 は実験 1〜4 を定義しています。実験 1 / 2 は SA の遷移演算子・hybrid 戦略の評価でしたが、実験 3 / 4 は **改善ループ（spec §14）の戦略を比較する** 層です。
+
+- **実験 3**: rule_based / pareto / random_search の 3 戦略を同一 seed × n_trials で並べて、composite objective でのベスト trial と戦略別平均を出す。Welch's t + Holm 補正で戦略間有意差を判定
+- **実験 4**: rule_based 戦略 1 つを 5 seeds × 5 trials = 25 試行で回し、4 指標の CV と bootstrap 95% CI を測る。後続実験のサンプルサイズ設計に使う
+
+改善ループは Issue #119 / PR #120 で実装、本 paper_results 化は Issue #121 で完了しました。
 
 ## 4. 再現手順
 
@@ -36,17 +45,25 @@ spec §15 は実験 1〜4 を定義していますが、本 Issue（#115）で�
 # 1) 依存を frozen で揃える
 uv sync --frozen --all-groups
 
-# 2) 1 コマンドで実験 1 / 2 を再実行 + 許容幅判定
+# 2) 1 コマンドで実験 1 / 2 / 3 / 4 を再実行 + 許容幅判定
 make paper-results
+
+# 個別実行
+make paper-results-exp01
+make paper-results-exp02
+make paper-results-exp03
+make paper-results-exp04
 ```
 
-実測時間（n=3 / 100 世帯）:
+実測時間（CI 軽量設定、ローカル WSL2）:
 
 | 実験 | runs | 所要時間 |
 |---|---:|---:|
 | experiment-01 | 12 | 約 4 分 |
 | experiment-02 | 9 | 約 4.5 分 |
-| 合計 | 21 | 約 8.5 分 |
+| experiment-03 | 45 | 約 45 秒 |
+| experiment-04 | 25 | 約 27 秒 |
+| 合計 | 91 | 約 9.5〜10 分 |
 
 ### 4.2 期待値の更新（手動）
 
@@ -75,8 +92,11 @@ n=10 seeds × 5 evals 水準 × 1000 世帯。通常 1〜2 時間かかるため
 
 ## 6. 関連ドキュメント
 
+- spec §14: 改善ループ（実験 3 / 4 の前提）
 - spec §15.1 / §15.2: 実験 1 / 2 の論文側仕様
 - spec §19.3 / §19.4: 決定性と許容幅
-- `docs/experiment_plan.md`: 凍結値の事前登録
+- `docs/experiment_plan.md`: 凍結値の事前登録（4 実験すべての仮説とサンプルサイズ）
 - `docs/status.md`: 現状サマリ
-- Issue #115: 本ディレクトリの作成 Issue
+- Issue #115: 本ディレクトリの作成 Issue（実験 1 / 2）
+- Issue #119 / PR #120: 改善ループ実体化
+- Issue #121: 実験 3 / 4 の paper_results 化

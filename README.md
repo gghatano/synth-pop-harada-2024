@@ -97,16 +97,23 @@ e-Stat からの実データ取得は `scripts/fetch_estat.py`（Phase 2 以降�
 
 ## 4.5. 論文結果を再現する
 
-Murata 2017 §15.1 / §15.2 の主要実験を、固定 seed 1 コマンドで再実行できます。リファクタや依存更新で数値がずれたら CI が ±1% 許容幅で検出します（spec §19.3 / §19.4）。
+Murata 2017 §15.1 / §15.2 の主要実験と、本実装独自の改善ループ評価（実験 3 / 4）を、固定 seed 1 コマンドで再実行できます。リファクタや依存更新で数値がずれたら CI が ±1% 許容幅で検出します（spec §19.3 / §19.4）。
 
 ```bash
 uv sync --frozen --all-groups
 make paper-results
 ```
 
-CI 既定設定（n=3 seeds / 100 世帯 / 約 8 分）の最終 `best_score` は `paper_results/experiment-XX/expected/*.csv` にコミット済みです。論文値の最終固定（n=10 / 5 水準 / 1000 世帯）は `make paper-results-full`（`workflow_dispatch` 限定の重実験）で別途生成します。詳細は [`paper_results/README.md`](paper_results/README.md) を参照してください。
+CI 既定設定（4 実験合計で約 9〜10 分、約 91 SA runs）の最終値は `paper_results/experiment-XX/expected/*.csv` にコミット済みです。
 
-実験 3 / 4（rule_based vs pareto / 候補ばらつき）は改善ループの実装後に追加されます。
+| 実験 | 内容 | 個別ターゲット |
+|---|---|---|
+| 1 | age-change vs age-swap | `make paper-results-exp01` |
+| 2 | hybrid 戦略の比較 | `make paper-results-exp02` |
+| 3 | 改善ループ 3 戦略比較（rule_based / pareto / random_search） | `make paper-results-exp03` |
+| 4 | 複数候補ばらつき（CV + bootstrap 95% CI） | `make paper-results-exp04` |
+
+実験 1 / 2 の論文値最終固定（n=10 / 5 水準 / 1000 世帯）は `make paper-results-full`（`workflow_dispatch` 限定の重実験）で別途生成します。詳細は [`paper_results/README.md`](paper_results/README.md) を参照してください。
 
 ---
 

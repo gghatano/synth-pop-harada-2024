@@ -22,9 +22,9 @@ from tempfile import TemporaryDirectory
 
 import numpy as np
 import pandas as pd
-
 from paper_results._shared.improve_runner import run_improve_for_paper_results
 from paper_results._shared.tolerance_check import compare
+
 from synthpop_jp.compare.stats import bootstrap_ci
 
 EXPERIMENT_DIR = Path(__file__).resolve().parent
@@ -63,7 +63,7 @@ def _run_grid(
     n_trials: int,
     output_root: Path,
 ) -> pd.DataFrame:
-    """seeds × trials の格子点で improve loop を走らせ、結果を 1 つの DataFrame に."""
+    """Seeds × trials の格子点で improve loop を走らせ、結果を 1 つの DataFrame に."""
     frames: list[pd.DataFrame] = []
     for seed in seeds:
         print(
@@ -78,8 +78,7 @@ def _run_grid(
             output_root=output_root,
         )
         print(
-            f"[exp04]   trials={len(df)} "
-            f"min_best_score={df['best_score'].min():.1f}",
+            f"[exp04]   trials={len(df)} min_best_score={df['best_score'].min():.1f}",
             flush=True,
         )
         frames.append(df)
@@ -104,7 +103,7 @@ def _format_trial_metrics(all_trials: pd.DataFrame) -> pd.DataFrame:
     out = all_trials[
         ["seed", "trial_id", "best_score", "statistical_fit", "utility_proxy", "privacy_proxy"]
     ].copy()
-    return out.sort_values(["seed", "trial_id"]).reset_index(drop=True)
+    return out.sort_values(by=["seed", "trial_id"]).reset_index(drop=True)  # type: ignore[arg-type]
 
 
 def _compute_variance_summary(trial_metrics: pd.DataFrame) -> pd.DataFrame:
@@ -177,9 +176,7 @@ def _do_run(*, write: bool, summary_out: Path | None) -> int:
     expected_summary = out_dir / "variance_summary.csv"
 
     if not write and not expected_trials.exists():
-        msg = (
-            f"expected CSV not found: {expected_trials}. Run with --write-expected first."
-        )
+        msg = f"expected CSV not found: {expected_trials}. Run with --write-expected first."
         print(msg, file=sys.stderr)
         return 2
 
