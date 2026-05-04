@@ -32,10 +32,12 @@ CI_SEEDS: tuple[int, ...] = (1, 2, 3)
 CI_EVALS_PER_AGENT: int = 2000
 CI_HOUSEHOLDS: int = 100
 
-#: フル設定（spec §15.2 / experiment_plan.md 凍結値）。
-FULL_SEEDS: tuple[int, ...] = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
-FULL_EVALS_PER_AGENT: int = 4000
-FULL_HOUSEHOLDS: int = 1000
+#: フル設定（spec §15.2 / experiment_plan.md 推奨値の代わりに、当面は
+#: **scale-up smoke**（n=5 / evals=2000 / 500 世帯）で実施する。論文値の
+#: 完全再現は別 Issue で別途タイムスロット確保（exp01 と同じ理由）。
+FULL_SEEDS: tuple[int, ...] = (1, 2, 3, 4, 5)
+FULL_EVALS_PER_AGENT: int = 2000
+FULL_HOUSEHOLDS: int = 500
 
 TRANSITIONS: tuple[str, ...] = ("age_change", "age_swap", "hybrid")
 

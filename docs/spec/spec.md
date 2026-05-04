@@ -569,28 +569,40 @@ select best configuration
 
 ### 14.2 改善対象
 
-* transition type
-* cooling schedule
-* objective weights（研究拡張モードのみ）
-* max iterations
-* household initialization heuristics
+最小実装（Issue #119）では以下 4 軸を改善対象とする。
+
+* `annealing.transition_kind` (`age-change` / `age-swap` / `hybrid`)
+* `annealing.alpha` (指数冷却の冷却率)
+* `annealing.evals_per_agent` (SA の停止条件)
+* `annealing.p_change` (hybrid 遷移時の AgeChange 確率)
+
+将来拡張（後続 Issue）として以下を上乗せできる構造（`Settings` で受ける）にしてある。
+
+* objective weights（研究拡張モードのみ、Issue #71 既存）
+* max iterations / patience / target_threshold（既に Settings 側で設定可能）
+* household initialization heuristics（`use_zero_error_init` などの拡張軸）
 
 ### 14.3 改善戦略（baseline）: rule_based
 
-if-then ルールを baseline として維持する。
+if-then ルールを baseline として維持する。実装は `synthpop_jp.improve.strategy.RuleBasedStrategy`。直近 trial の `metrics` のみを見て次の `Settings` を決める純粋関数（決定論的）。
 
-* 親子年齢差誤差が大きい → `age-change` 比率を上げる
-* demographic 誤差が小さいが親族関係誤差が大きい → `age-swap` を増やす
-* rare cell unique 率が高い → `evals_per_agent` を下げる
-* 収束が遅い → 温度減衰を緩める
+* `aggregate.l1.parent_child > 1.0` → `p_change` を +0.1（age-change を厚く）
+* `aggregate.l1.demographic < 0.5` かつ `parent_child > demo*2` → `p_change` を −0.1（age-swap を厚く）
+* `rare_cell.unique_rate > 0.3` → `evals_per_agent` を 0.7 倍（過学習回避）
+* improvement (= 1 − best/initial) < 30% → `alpha` を +0.001（温度減衰を緩める、上限 0.9999）
 
 ### 14.4 改善戦略（MVP）: pareto / random_search
 
 本研究の本質は「統計整合性 × 有用性 × 秘匿性」の 3 目的最適化である（Priv 指摘 9）。`improve.strategy` は以下 3 値を取る。
 
 * `rule_based`（baseline、§14.3）
-* `pareto`（MVP、全 trial を 3 次元スコア空間にプロットし non-dominated set を抽出、`outputs/*/pareto.png` を出力）
-* `random_search`（参照用）
+* `pareto`（MVP、`synthpop_jp.improve.strategy.ParetoStrategy`）。全 trial を `(statistical_fit, utility, privacy)` の 3 次元スコア空間に写像し、`synthpop_jp.improve.pareto.extract_non_dominated` で non-dominated set を抽出する。次の `Settings` は最も新しい non-dominated trial の config に小さなジッタ（`p_change ±0.1` / `alpha ±0.005` / `evals_per_agent ±20%`、`transition_kind` は継承）を乗せて返す。可視化は `outputs/<run_id>/pareto_front.md`（後続で `pareto.png` も追加可）。
+* `random_search`（参照用、`RandomSearchStrategy`）。`DEFAULT_PARAM_RANGES` から一様サンプリング。
+
+CLI: `synthpop-jp improve --strategy NAME --trials N --seed S --output-dir PATH`。
+出力: `<output-dir>/<run_id>/{trial_NNN/{synthetic_*.csv, metrics.json}, best_config.yaml, summary.md, pareto_front.md (pareto 戦略時のみ)}`。`run_id = "<strategy>_seed<seed>"` で時刻に依存させない。
+
+決定性: 同一 `seed × strategy × base_settings` で `best_config.yaml` が bitwise 一致する。`Settings` 側のパスは basename だけが best_config.yaml に書かれる（絶対パスは tmp_path などで実行ごとに変わるため）。
 
 rule_based vs pareto の比較は §15.3 実験 3 の主対象とする。
 
@@ -598,6 +610,7 @@ rule_based vs pareto の比較は §15.3 実験 3 の主対象とする。
 
 * Bayesian optimization
 * bandit による遷移選択
+* 改善対象軸の拡張（objective weights / max_iters など）
 
 ## 15. 実験計画
 

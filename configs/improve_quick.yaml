@@ -1,0 +1,38 @@
+# 改善ループ用の軽量 base 設定 (Issue #121)
+#
+# paper_results/experiment-03 / experiment-04 が読み込む base settings。
+# CI で 5 trial × 3 戦略 / 5 trial × 5 seed が 30 分以内に収まるよう、
+# evals_per_agent / max_iters を最小限まで絞る。
+#
+# - 100 世帯（data/sample_case/ そのまま）
+# - strict_extended (Murata 式(3) 21 統計) は ObjectiveConfig で指定
+# - improve loop の各 trial は SA seed = settings.seed + trial_id でずらす
+#   （src/synthpop_jp/improve/runner.py の挙動）
+seed: 1
+
+input_dir: data/sample_case
+
+# improve loop 出力のルート（`run_improve_loop` は output_root 引数を優先する）
+output_dir: outputs/improve_quick
+
+# SA 軽量設定（CI 既定の 30 分予算に収めるための最小値）
+annealing:
+  T0: 1.0
+  alpha: 0.999
+  max_iters: 50000
+  evals_per_agent: 200
+  target_threshold: 0.0
+  patience: 0
+  log_every_n_iters: 100000
+  trace_enabled: false
+  checkpoint_every_n_iters: 0
+  transition_kind: age-change
+  p_change: 0.7
+  p_swap: 0.3
+  p_change_schedule: constant
+
+# objective: Murata 式(3) 準拠 (strict_extended) + zero-error init
+objective:
+  use_family_type_pyramid: true
+  exclude_male_female_pyramid: true
+  use_zero_error_init: true

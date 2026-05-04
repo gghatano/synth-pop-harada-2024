@@ -1,0 +1,4 @@
+strategy,statistical_fit_mean,utility_proxy_mean,privacy_proxy_mean,composite_mean
+pareto,2377.8,0.809602,0.0,0.599019
+random_search,2263.8,0.770787,0.0,0.52329
+rule_based,2263.8,0.770787,0.0,0.589498

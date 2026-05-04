@@ -69,6 +69,14 @@
       "reportUnknownArgumentType": "none",
       "reportArgumentType": "none",
       "reportMissingTypeStubs": "none"
+    },
+    {
+      "root": "tests/improve",
+      "reportUnknownMemberType": "none",
+      "reportUnknownVariableType": "none",
+      "reportUnknownArgumentType": "none",
+      "reportArgumentType": "none",
+      "reportPrivateUsage": "none"
     }
   ]
 }

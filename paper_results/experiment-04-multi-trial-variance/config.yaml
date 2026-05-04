@@ -1,0 +1,32 @@
+# 実験 04: 複数候補ばらつきの固定設定
+#
+# このファイルは記録用です。`run.py` が値を直接 hardcode します。
+#
+# spec §14（改善ループ）+ Issue #121 plan に対応。
+
+# --- 共通設定 ---
+seed_root_list: [1, 2, 3, 4, 5]   # CI 既定 (5 seeds)
+n_trials: 5                       # seed あたりの試行数
+n_households: 100
+
+# 戦略は rule_based 固定（pareto / random_search は experiment-03 で比較済）
+strategy: rule_based
+
+# base settings は configs/improve_quick.yaml を参照
+base_config: configs/improve_quick.yaml
+
+# bootstrap CI 設定
+bootstrap:
+  n_bootstrap: 2000
+  confidence: 0.95
+  rng_seed: 42                   # bootstrap 用 RNG の固定 seed
+
+# 期待値 CSV の配置
+expected_paths:
+  trial_metrics: expected/trial_metrics.csv
+  variance_summary: expected/variance_summary.csv
+
+# 許容幅（spec §19.4）
+tolerance:
+  best_score: 0.01
+  utility: 0.05

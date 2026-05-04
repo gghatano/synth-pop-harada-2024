@@ -36,7 +36,8 @@
 ### サンプルサイズ（Issue #115 で確定）
 
 - **CI 軽量設定**（`make paper-results`）: seed n=3、`evals_per_agent ∈ {500, 2000}`、世帯数 100。〜4 分以内に終わる退行検出用設定
-- **フル設定**（`make paper-results-full`、`workflow_dispatch` / ローカル限定）: seed n=10、`evals_per_agent ∈ {1000, 2000, 4000, 8000, 16000}`、世帯数 1000。Murata 2017 §15.1 と整合する論文値固定用
+- **フル設定（推奨値、別 Issue 待ち）**: seed n=10、`evals_per_agent ∈ {1000, 2000, 4000, 8000, 16000}`、世帯数 1000。Murata 2017 §15.1 と整合する論文値固定用。本実装で age_swap が 1000 世帯 × 16000 evals で 1 SA 約 1 時間と実測されたため、4 実験合計が 1 日以上にのぼる。別 Issue で 1 日タイムスロット確保時に着手
+- **フル設定（実施済 scale-up smoke）**: seed n=5、`evals_per_agent ∈ {1000, 2000, 4000}`、世帯数 500。`make paper-results-full` で `expected-full/*.csv` を凍結済（PR #123）
 
 ### 停止条件
 
@@ -45,7 +46,7 @@
 ### 期待値の固定先
 
 - CI: `paper_results/experiment-01-age-change-vs-age-swap/expected/best_scores.csv` + `stat_l1.csv`
-- Full: 同ディレクトリの `expected-full/` 以下（本 Issue では未生成、後続で `--full --write-expected`）
+- Full（scale-up smoke、PR #123 で凍結）: 同ディレクトリの `expected-full/` 以下（n=5 / 3 evals 水準 / 500 世帯）
 
 ## 実験 2（§15.2）: hybrid 戦略
 
@@ -65,7 +66,8 @@
 ### サンプルサイズ（Issue #115 で確定）
 
 - **CI 軽量設定**: seed n=3、`evals_per_agent=2000` 固定、世帯数 100、戦略 = {age_change, age_swap, hybrid}（3 戦略 × 3 ペアの Welch + Holm）
-- **フル設定**: seed n=10、`evals_per_agent=4000` 固定、世帯数 1000
+- **フル設定（推奨値、別 Issue 待ち）**: seed n=10、`evals_per_agent=4000` 固定、世帯数 1000
+- **フル設定（実施済 scale-up smoke）**: seed n=5、`evals_per_agent=2000`、世帯数 500（PR #123）
 
 ### Hybrid のスケジュール
 
@@ -75,7 +77,7 @@
 ### 期待値の固定先
 
 - CI: `paper_results/experiment-02-hybrid-strategy/expected/best_scores.csv`
-- Full: 同ディレクトリの `expected-full/`（本 Issue では未生成）
+- Full（scale-up smoke、PR #123）: 同ディレクトリの `expected-full/best_scores.csv`
 
 ## 実験 3（§15.3）: 改善戦略比較（rule_based vs pareto vs random_search）
 
@@ -93,7 +95,21 @@
 
 - Welch's t test + Holm 補正
 
-**Phase 3 着手前に埋める。**
+### 改善ループ設定（Issue #119 で実装、Issue #121 で paper_results 化済）
+
+- `synthpop-jp improve --strategy {rule_based,pareto,random_search} --trials N --seed S` を 3 戦略 × seed 群で回す
+- ベース config: `configs/improve_quick.yaml`（CI 軽量、`evals_per_agent=200`, `max_iters=50000`）
+- 改善対象 4 軸: `transition_kind` / `alpha` / `evals_per_agent` / `p_change`（spec §14.2）
+- 出力: `outputs/improve/<strategy>_seed<S>/`（`best_config.yaml` / `summary.md` / pareto 時は `pareto_front.md`）
+- 比較対象: 各 run の `summary.md` と `metrics.json` 集約。`compare` コマンドで Welch's t + Holm 補正
+
+### サンプルサイズと停止条件（Issue #121 で確定）
+
+- **CI 軽量設定**（`make paper-results-exp03`）: seeds=[1,2,3] × n_trials=5 × 3 戦略 = 45 SA runs / 100 世帯。実測 約 45 秒
+- **停止条件**: 各 trial の SA は `max_iters = evals_per_agent × n_persons` の上限到達で打ち切り（target_threshold=0、early-stop なし）
+- **期待値の固定先**: `paper_results/experiment-03-improve-strategy-comparison/expected/{best_scores.csv, strategy_metrics.csv}`
+- **論文値固定（フル設定 推奨値）**: 別 Issue で 1000 世帯 + n_seeds=10 + n_trials=20 へ拡張
+- **scale-up smoke（実施済、PR #123）**: 500 世帯 / n_seeds=5 / n_trials=10 で `expected-full/{best_scores.csv, strategy_metrics.csv}` を凍結
 
 ## 実験 4（§15.4）: 複数候補のばらつき
 
@@ -110,7 +126,18 @@
 
 - 変動係数の bootstrap CI 比較
 
-**Phase 3 着手前に埋める。**
+### 改善ループ設定（Issue #121 で paper_results 化済）
+
+- 単一 strategy（`rule_based`）を seed 群で回す
+- 集約は `summary.md` と各 trial の `metrics.json` を seed 横断で stack し、`synthpop_jp.compare.stats.bootstrap_ci`（n_bootstrap=2000, 95% CI, 固定 RNG seed=42）で変動係数の信頼区間を出す
+
+### サンプルサイズと停止条件（Issue #121 で確定）
+
+- **CI 軽量設定**（`make paper-results-exp04`）: seeds=[1..5] × n_trials=5 = 25 SA runs / 100 世帯。実測 約 27 秒
+- **停止条件**: 実験 3 と同じ（max_iters 上限）
+- **期待値の固定先**: `paper_results/experiment-04-multi-trial-variance/expected/{trial_metrics.csv, variance_summary.csv}`
+- **scale-up smoke（実施済、PR #123）**: 500 世帯 / n_seeds=5 / n_trials=10 で `expected-full/*` を凍結
+- **実測知見**: 4 指標すべて CV ≤ 0.12% で H4 の安定化仮説を強く支持。後続実験で seed n=3 でも十分という設計判断ができる
 
 ## shadow seed 群の運用
 
