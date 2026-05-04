@@ -155,7 +155,7 @@ spec §14 は「生成 → 評価 → 改善」の反復ループを定義する
 
 ### 4.3 テスト・CI
 
-- **本体テスト 560 passed / 10 skipped**（`docs/status.md` 引用、status.md の最終更新は 2026-05-04 / SHA `ee2e5d4` 時点。本レポート時点の develop SHA `cc65498` は #115 マージ後のため、`paper_results/` 関連テストの追加で実数はやや増えている可能性がある）。
+- **本体テスト 702 passed / 10 skipped**（develop SHA `cc65498` 時点。#115 マージで `tests/paper_results/` と `tests/scripts/` から 36 件追加。`docs/status.md` の §1 末尾表は 560 のまま残っており、別 Issue で更新予定）。
 - **bitwise 決定性テスト**: 同一 seed・同一入力で `best_score` が完全一致することを `tests/paper_results/test_determinism.py` が常時チェック。
 - **CI parity**: `make ci` 1 コマンド化は #47 で進行中。現状は ruff / pyright / pytest / docs build を個別コマンドで実行。
 
