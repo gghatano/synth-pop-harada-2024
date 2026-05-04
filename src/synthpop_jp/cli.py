@@ -12,7 +12,7 @@ from __future__ import annotations
 import logging
 from enum import StrEnum
 from pathlib import Path
-from typing import Annotated, NoReturn
+from typing import Annotated
 
 import typer
 from rich.console import Console
@@ -35,21 +35,6 @@ class LogLevel(StrEnum):
     INFO = "INFO"
     WARNING = "WARNING"
     ERROR = "ERROR"
-
-
-def _not_yet(command: str, phase: str) -> NoReturn:
-    """Print a phase notice and exit non-zero.
-
-    Using :class:`typer.Exit` here (rather than ``raise NotImplementedError``)
-    ensures coverage flags the subcommand body when Phase 1+ forgets to
-    replace it.
-    """
-    typer.secho(
-        f"[{phase}] `{command}` is not yet implemented.",
-        fg=typer.colors.YELLOW,
-        err=True,
-    )
-    raise typer.Exit(code=2)
 
 
 @app.command()
@@ -818,18 +803,125 @@ def evaluate(
 
 
 @app.command()
-def improve(config: str = "configs/base.yaml", trials: int = 10) -> None:
-    """Run the improvement loop (Phase 5 onward).
+def improve(
+    config: Annotated[
+        Path | None,
+        typer.Option("--config", help="設定ファイルのパス。省略時は configs/base.yaml を使う。"),
+    ] = None,
+    strategy: Annotated[
+        str,
+        typer.Option(
+            "--strategy",
+            help="改善戦略: rule_based / pareto / random_search のいずれか (spec §14)。",
+        ),
+    ] = "rule_based",
+    trials: Annotated[
+        int,
+        typer.Option("--trials", help="実行する trial 数（1 以上）。"),
+    ] = 10,
+    seed: Annotated[
+        int,
+        typer.Option("--seed", help="改善戦略内部の乱数 seed。SA seed は base seed + trial_id。"),
+    ] = 42,
+    output_dir: Annotated[
+        Path | None,
+        typer.Option(
+            "--output-dir",
+            help="出力ルート。省略時は <config の output_dir>/improve/ に書き出す。",
+        ),
+    ] = None,
+    log_level: Annotated[
+        LogLevel,
+        typer.Option("--log-level", help="ログレベル。"),
+    ] = LogLevel.INFO,
+) -> None:
+    """multi-trial 改善ループを実行する (Issue #119, spec §14).
 
-    Parameters
-    ----------
-    config : str
-        Path to a YAML configuration file.
-    trials : int
-        Number of trials to execute.
+    指定された戦略（rule_based / pareto / random_search）で n_trials 回の SA を
+    回し、各 trial の合成人口と評価指標を ``<output-dir>/<run_id>/trial_NNN/``
+    に書き出す。
+
+    全 trial 終了後、composite objective (best_score) で best を選び、
+
+    - ``best_config.yaml``: best trial の Settings（path は basename に正規化、
+      決定性のため）
+    - ``summary.md``: 30 秒で読める要点（best 選定の根拠 + 全 trial 一覧 + 4
+      objective 別 best）
+    - ``pareto_front.md``: pareto 戦略時のみ（non-dominated set の表）
+
+    を ``<output-dir>/<run_id>/`` に出力する。
     """
-    del config, trials
-    _not_yet("improve", "Phase 5")
+    from pydantic import ValidationError
+
+    from synthpop_jp.config import Settings
+    from synthpop_jp.improve.runner import run_improve_loop
+
+    logging.basicConfig(level=getattr(logging, log_level.value))
+
+    if config is None:
+        config = _find_default_config()
+
+    console.print(f"[bold]設定ファイル:[/bold] {config}")
+    try:
+        settings = Settings.from_yaml(config)
+    except FileNotFoundError:
+        err_console.print(f"[red]エラー:[/red] 設定ファイルが見つかりません: {config}")
+        raise typer.Exit(code=1) from None
+    except ValidationError as exc:
+        err_console.print(f"[red]設定ファイルのバリデーションエラー:[/red]\n{exc}")
+        raise typer.Exit(code=1) from None
+
+    # input_dir / output_dir の相対パスを解決
+    base_dir = _find_project_root(config)
+    input_dir = settings.input_dir
+    base_output_dir = settings.output_dir
+    if not input_dir.is_absolute():
+        input_dir = base_dir / input_dir
+    if not base_output_dir.is_absolute():
+        base_output_dir = base_dir / base_output_dir
+    settings = settings.model_copy(
+        update={"input_dir": input_dir, "output_dir": base_output_dir},
+    )
+
+    # family_type_mapping を補完（improve runner が basename だけで探さないので明示）
+    if settings.family_type_mapping is None:
+        mapping_path = _find_family_type_mapping(config)
+        settings = settings.model_copy(update={"family_type_mapping": mapping_path})
+
+    if trials < 1:
+        err_console.print(f"[red]エラー:[/red] --trials は 1 以上 (got {trials})")
+        raise typer.Exit(code=1)
+
+    if strategy not in {"rule_based", "pareto", "random_search"}:
+        err_console.print(
+            f"[red]エラー:[/red] --strategy は rule_based / pareto / random_search "
+            f"(got {strategy!r})",
+        )
+        raise typer.Exit(code=2)
+
+    if output_dir is None:
+        output_dir = base_output_dir / "improve"
+    output_dir = output_dir if output_dir.is_absolute() else base_dir / output_dir
+
+    console.print(
+        f"[bold]改善ループ実行:[/bold] strategy={strategy}, trials={trials}, "
+        f"seed={seed}, output={output_dir}",
+    )
+
+    result = run_improve_loop(
+        settings,
+        strategy_name=strategy,  # type: ignore[arg-type]
+        n_trials=trials,
+        seed=seed,
+        output_root=output_dir,
+    )
+
+    console.print("[green]改善ループ完了:[/green]")
+    console.print(f"  run_id: {result.run_id}")
+    console.print(f"  trials: {len(result.history)}")
+    console.print(f"  best trial: {result.best.trial_id}")
+    console.print(f"  best best_score: {result.best.metrics.get('best_score', float('nan')):.3f}")
+    console.print(f"  output_dir: {result.output_dir}")
 
 
 @app.command()
