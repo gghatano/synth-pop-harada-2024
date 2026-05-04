@@ -65,10 +65,31 @@ n=3 では Wilcoxon の最小 p-value は 0.25 のため、統計的に有意と
 - Wilcoxon の有意性は n≥6 以上必要（α=0.05、両側）。フル設定でのみ検出力が確保される
 - 本実装は乱数経路を `SeedRegistry` で固定しているため、seed が同じなら 2 回呼んで bitwise 一致する（`tests/paper_results/test_determinism.py` で常時検証）
 
-## 5. 再現コマンド
+## 5. フル設定（scale-up smoke）での結果
+
+実施日: 2026-05-04 / scale-up smoke 設定（5 seeds × evals {1000, 2000, 4000} × 500 世帯、30 SA runs、約 60 分）。論文準拠の n=10 / evals 16000 / 1000 世帯では age_swap 1 SA で 1 時間級になり 1 日以上必要なため、本リポジトリでは「scale-up smoke」を採用する（`paper_results/expected-full/`）。
+
+### 5.1 best_score 一覧（5 seeds、scale-up smoke）
+
+| evals | age_change 平均 | age_swap 平均 | swap - change |
+|---:|---:|---:|---:|
+| 1000 | 2260.6 | 2832.4 | +571.8 |
+| 2000 | 2260.6 | 2832.4 | +571.8 |
+| 4000 | 2260.6 | 2832.4 | +571.8 |
+
+5 seeds × 3 evals 水準で **age_change が一貫して age_swap を 25% 上回る**。evals 増加で age_swap が逆転する Murata 2017 の H1b は、本実装の 500 世帯 / evals=4000 規模では観測されなかった。
+
+### 5.2 解釈
+
+- 100 世帯（CI 軽量）と同様に、500 世帯 × evals=4000 まで拡大しても **age_change が支配的**。Murata 2017 が示した age_swap の優位は、本実装の sample_case では 4000 evals では再現しない
+- 真の論文値再現には evals=16000 / 1000 世帯のフル設定が必要。`paper_results/experiment-01-...` の FULL_EVALS には実装上 16000 を含むが、計算時間（age_swap 1 SA で 1 時間以上）の制約から本 PR では 4000 までで停止
+- 一方、退行検出（数値が変わったら気づく）の用途は CI 軽量 + scale-up smoke の組み合わせで十分機能する
+- bitwise 決定性は本フル設定でも維持され、`expected-full/best_scores.csv` を CI 同等の許容幅判定に使える
+
+## 6. 再現コマンド
 
 ```bash
 make paper-results-exp01            # CI 既定で許容幅判定
 make paper-results-write            # expected/*.csv 再生成（手動更新）
-PYTHONPATH=. uv run python paper_results/experiment-01-age-change-vs-age-swap/run.py --full --write-expected
+PYTHONPATH=. uv run python paper_results/experiment-01-age-change-vs-age-swap/run.py --full --write-expected   # scale-up smoke
 ```
