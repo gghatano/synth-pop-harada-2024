@@ -1,0 +1,70 @@
+name: paper-results
+
+# Issue #115: Murata 2017 主要結果（実験 1 / 2）の許容幅再現を CI で検出する。
+# 重実験は走らせない（既定は CI 軽量設定 n=3 / 100 hh、約 8 分）。
+
+on:
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - "paper_results/**"
+      - "Makefile"
+      - "src/**"
+      - ".github/workflows/paper-results.yml"
+  schedule:
+    # nightly UTC 18:00 (JST 03:00)
+    - cron: "0 18 * * *"
+  workflow_dispatch:
+    inputs:
+      full:
+        description: "Run --full grid (heavy, ~1-2h)"
+        type: boolean
+        default: false
+
+concurrency:
+  group: paper-results-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  reproduce:
+    name: paper_results / py3.12 / ubuntu-latest
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+          python-version: "3.12"
+
+      - name: Install dependencies (frozen)
+        run: uv sync --frozen --all-groups
+
+      - name: Audit experiments/
+        run: uv run python scripts/audit_experiments.py >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Reproduce paper_results (CI default)
+        if: ${{ github.event_name != 'workflow_dispatch' || !inputs.full }}
+        run: |
+          set -o pipefail
+          PYTHONPATH=. uv run python paper_results/experiment-01-age-change-vs-age-swap/run.py --check-tolerance --summary-out "$GITHUB_STEP_SUMMARY"
+          PYTHONPATH=. uv run python paper_results/experiment-02-hybrid-strategy/run.py --check-tolerance --summary-out "$GITHUB_STEP_SUMMARY"
+
+      - name: Reproduce paper_results (--full)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.full }}
+        run: |
+          set -o pipefail
+          PYTHONPATH=. uv run python paper_results/experiment-01-age-change-vs-age-swap/run.py --full --check-tolerance --summary-out "$GITHUB_STEP_SUMMARY"
+          PYTHONPATH=. uv run python paper_results/experiment-02-hybrid-strategy/run.py --full --check-tolerance --summary-out "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload outputs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: paper-results-actual
+          path: paper_results/*/outputs/
+          if-no-files-found: ignore

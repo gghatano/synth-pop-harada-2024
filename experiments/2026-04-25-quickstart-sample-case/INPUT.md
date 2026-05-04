@@ -39,3 +39,9 @@ uv run synthpop-jp quickstart
 | 男性 | 153 人 |
 | 女性 | 113 人 |
 | 平均世帯人数 | 2.66 人/世帯 |
+
+## 再現性の指紋（spec §19.3 / Issue #115）
+
+- seed: 42（`config.yaml` の既定値）
+- commit_sha: 7dfdf74 (本実験を最初に追加したコミット、PR #55)
+- uv_lock_sha256: dda09efe4af1e31e4f985b2b8b513267f79cfc94dce3856e678347d8def8fa82

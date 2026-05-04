@@ -95,6 +95,21 @@ e-Stat からの実データ取得は `scripts/fetch_estat.py`（Phase 2 以降�
 
 ---
 
+## 4.5. 論文結果を再現する
+
+Murata 2017 §15.1 / §15.2 の主要実験を、固定 seed 1 コマンドで再実行できます。リファクタや依存更新で数値がずれたら CI が ±1% 許容幅で検出します（spec §19.3 / §19.4）。
+
+```bash
+uv sync --frozen --all-groups
+make paper-results
+```
+
+CI 既定設定（n=3 seeds / 100 世帯 / 約 8 分）の最終 `best_score` は `paper_results/experiment-XX/expected/*.csv` にコミット済みです。論文値の最終固定（n=10 / 5 水準 / 1000 世帯）は `make paper-results-full`（`workflow_dispatch` 限定の重実験）で別途生成します。詳細は [`paper_results/README.md`](paper_results/README.md) を参照してください。
+
+実験 3 / 4（rule_based vs pareto / 候補ばらつき）は改善ループの実装後に追加されます。
+
+---
+
 ## 5. 入出力
 
 入力は「集計表の CSV 群」、出力は「世帯・個人の合成マイクロデータ CSV」です。詳細な列定義・単位・欠損規則は [`docs/spec/spec.md`](docs/spec/spec.md) §7 を参照してください。

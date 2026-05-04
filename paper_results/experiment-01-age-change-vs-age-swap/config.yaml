@@ -1,0 +1,44 @@
+# 実験 01: age-change vs age-swap の固定設定
+#
+# このファイルは記録用です。`run.py` は値を直接 hardcode しています
+# （CI / フルの 2 モード切替を Python 側で行うため、YAML から読み込む構造に
+# しないことで「複数モードの整合性」を担保しています）。
+#
+# spec §11.4.1（原論文準拠モード）+ §15.1（実験 1）に対応。
+
+# --- SA 共通設定 ---
+seed_root_list: [1, 2, 3]   # CI default. full mode is [1..10]
+n_households: 100           # CI default. full mode is 1000
+
+annealing:
+  T0: 1.0
+  alpha: 0.999
+  evals_per_agent_list:
+    ci: [500, 2000]
+    full: [1000, 2000, 4000, 8000, 16000]
+  trace_enabled: false
+  checkpoint_every_n_iters: 0
+
+objective:
+  use_family_type_pyramid: true
+  exclude_male_female_pyramid: true   # strict_extended (Murata 式(3))
+  use_zero_error_init: true
+
+# 評価する戦略
+transitions:
+  - age_change
+  - age_swap
+
+# 期待値 CSV の配置
+expected_paths:
+  ci:
+    best_scores: expected/best_scores.csv
+    stat_l1: expected/stat_l1.csv
+  full:
+    best_scores: expected-full/best_scores.csv
+    stat_l1: expected-full/stat_l1.csv
+
+# 許容幅（spec §19.4）
+tolerance:
+  best_score: 0.01    # ±1%
+  utility: 0.05       # ±5%

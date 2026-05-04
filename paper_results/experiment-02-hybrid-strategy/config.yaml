@@ -1,0 +1,44 @@
+# 実験 02: hybrid 戦略の固定設定（記録用）。
+#
+# `run.py` は値を直接 hardcode しています（CI / フルの 2 モード切替を Python
+# 側で行うため、YAML から読み込む構造にしないことで「複数モードの整合性」を
+# 担保しています）。
+#
+# spec §11.4.1（原論文準拠モード）+ §15.2（実験 2）に対応。
+
+seed_root_list: [1, 2, 3]   # CI default. full mode is [1..10]
+n_households: 100           # CI default. full mode is 1000
+
+annealing:
+  T0: 1.0
+  alpha: 0.999
+  evals_per_agent:
+    ci: 2000
+    full: 4000
+  trace_enabled: false
+  checkpoint_every_n_iters: 0
+
+objective:
+  use_family_type_pyramid: true
+  exclude_male_female_pyramid: true
+  use_zero_error_init: true
+
+transitions:
+  - age_change
+  - age_swap
+  - hybrid
+
+hybrid:
+  schedule: linear
+  p_change_start: 0.8
+  p_change_end: 0.2
+
+expected_paths:
+  ci:
+    best_scores: expected/best_scores.csv
+  full:
+    best_scores: expected-full/best_scores.csv
+
+tolerance:
+  best_score: 0.01
+  utility: 0.05

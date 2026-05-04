@@ -12,7 +12,9 @@
 #   make paper       # Phase 6 で実装（paper_results 再現）
 #   make pm          # PM status ダッシュボード（並列 Agent 進捗確認）
 
-.PHONY: help setup lint format type test bench quickstart docs paper pm all
+.PHONY: help setup lint format type test bench quickstart docs paper pm all \
+        paper-results paper-results-exp01 paper-results-exp02 paper-results-write \
+        paper-results-full repro-experiments audit-experiments
 
 help:
 	@echo "Available targets:"
@@ -54,9 +56,36 @@ docs:
 docs-serve:
 	uv run mkdocs serve
 
-paper:
-	@echo "[Phase 6] paper_results reproduction — not yet implemented"
-	@exit 1
+# --- paper_results 再現ターゲット (Issue #115) ---
+# `make paper-results` で実験 01 / 02 を CI 既定設定で再実行し、
+# expected/*.csv に対する許容幅判定（spec §19.4 ±1%）を行う。
+# 期待値の更新は `make paper-results-write` を手動で走らせる。
+# フル設定（spec §15.1 / §15.2 凍結値）は `make paper-results-full`。
+
+paper-results: paper-results-exp01 paper-results-exp02
+
+paper-results-exp01:
+	PYTHONPATH=. uv run python paper_results/experiment-01-age-change-vs-age-swap/run.py --check-tolerance
+
+paper-results-exp02:
+	PYTHONPATH=. uv run python paper_results/experiment-02-hybrid-strategy/run.py --check-tolerance
+
+paper-results-write:
+	PYTHONPATH=. uv run python paper_results/experiment-01-age-change-vs-age-swap/run.py --write-expected
+	PYTHONPATH=. uv run python paper_results/experiment-02-hybrid-strategy/run.py --write-expected
+
+paper-results-full:
+	PYTHONPATH=. uv run python paper_results/experiment-01-age-change-vs-age-swap/run.py --full --check-tolerance
+	PYTHONPATH=. uv run python paper_results/experiment-02-hybrid-strategy/run.py --full --check-tolerance
+
+# 旧 paper: ターゲットの後方互換エイリアス。
+paper: paper-results
+
+repro-experiments:
+	@bash scripts/run_experiments_by_weight.sh light
+
+audit-experiments:
+	uv run python scripts/audit_experiments.py
 
 .PHONY: pm
 pm:

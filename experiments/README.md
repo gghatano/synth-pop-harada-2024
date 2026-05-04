@@ -28,6 +28,18 @@ experiments/
 | [`2026-04-29-sa-memory-profile/`](2026-04-29-sa-memory-profile/) | SA の RAM 消費を 1k〜100k 世帯で実測 | 100k 世帯でも peak RSS 358MB（25.8GB の 1.4%） |
 | [`2026-04-30-9-family-types-coverage/`](2026-04-30-9-family-types-coverage/) | 9 family types すべてが SA 経路を通ることを seed×5 で確認 | 全 9 種で family_type 構成比が維持される |
 
+## 再現性監査（Issue #115）
+
+`make audit-experiments`（= `scripts/audit_experiments.py`）が走査した各実験の指紋整合チェック結果を以下に保存しています。フィールドが揃っていない実験は CI が落ちる前提です。
+
+| slug | INPUT.md | seed: | commit_sha: | uv_lock_sha256: | WEIGHT.md | run.py | 状態 |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| 2026-04-25-quickstart-sample-case | yes | yes | yes (7dfdf74) | yes | heavy | yes (CLI ラッパ) | PASS |
+| 2026-04-29-sa-memory-profile | yes | yes | yes (c3e4478) | yes | heavy | yes | PASS |
+| 2026-04-30-9-family-types-coverage | yes | yes | yes (9d188c5) | yes | light | yes | PASS |
+
+監査結果はマシン読みでも `uv run python scripts/audit_experiments.py` から Markdown 表として取得できます。
+
 ## 新しい実験を追加する
 
 1. `experiments/YYYY-MM-DD-<slug>/` を切る（slug は短く・意味が伝わるもの）
