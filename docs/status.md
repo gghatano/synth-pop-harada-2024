@@ -78,7 +78,7 @@
 - `paper_results/experiment-03-improve-strategy-comparison/` で改善ループ（spec §14）の rule_based / pareto / random_search 3 戦略比較が CI で常時走る（3 seeds × 3 戦略 × 5 trials, 約 45 秒）
 - `paper_results/experiment-04-multi-trial-variance/` で同設定 5 seeds × 5 trials のばらつきを CV + bootstrap 95% CI で測定済（4 指標すべて CV ≤ 0.12%）
 - `make paper-results` で 1 コマンド再現（4 実験合計で約 9〜10 分）+ ±1% 許容幅判定
-- `make paper-results-full` で実験 1 / 2 の n=10 / 5 水準 / 1000 世帯のフル再現（`workflow_dispatch` 限定の重実験）
+- `make paper-results-full` で 4 実験すべての **scale-up smoke**（n=5 / 3 evals 水準 / 500 世帯 / n_trials=10）を再現可能。`expected-full/` 凍結済（feature/paper-results-full-run）。論文値の完全再現（n=10 / 5 水準 / 1000 世帯）は age_swap が 1000 hh × 16000 evals で 1 SA 約 1 時間と判明したため別 Issue で 1 日タイムスロット確保時に実施
 - `.github/workflows/paper-results.yml` で PR / nightly に CI 実行
 - `make audit-experiments` で `experiments/` の再現性指紋（seed / SHA / uv.lock）を機械チェック
 
@@ -98,8 +98,8 @@
 - **改善ループ**: `improve/strategy.py` に rule_based / Pareto / random_search の骨格はあるが、multi-trial runner と best config 選択を実体化する必要あり
 - **MIA 実装**: 事前登録（`docs/spec/mia_protocol.md`）まで完了。TAPAS / DOMIAS の実装は shadow dataset 取得後に着手
 - **mkdocs サイトの GitHub Pages 公開**: build CI までは整備済み。デプロイ設定と既存 docs の repo-relative link を mkdocs 形式に直す作業が残る
-- **Murata 2017 実験 3 / 4**: Issue #121 で `paper_results/experiment-03-...` / `experiment-04-...` を追加済（CI 軽量設定）。フル設定は後続 Issue で 1000 世帯 + n=10 seeds に拡張する想定
-- **`paper_results/expected-full/`**: フル設定（n=10 / 5 水準 / 1000 世帯）の値固定はローカルでの 1〜2 時間 run が必要。`make paper-results-full` で生成可能
+- **Murata 2017 実験 3 / 4 のフル設定**: feature/paper-results-full-run（PR #123）で scale-up smoke（500 世帯 / n=5 / n_trials=10）の `expected-full/*.csv` を凍結済。論文値完全再現（1000 世帯 / n=10 / n_trials=20）は別 Issue
+- **`paper_results/expected-full/` の論文値完全再現**: 上記別 Issue で 1 日タイムスロット確保時に実施（age_swap が 1000 世帯 × evals=16000 で 1 SA 約 1 時間という実測由来）
 - **Zenodo DOI 連携と CITATION.cff の DOI 記入**
 
 ---

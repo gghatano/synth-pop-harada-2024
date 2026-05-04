@@ -87,3 +87,22 @@ make paper-results-write            # expected/*.csv 再生成（手動更新）
 | 実験 | runs | 所要時間 |
 |---|---:|---:|
 | experiment-03 | 45 (3 seeds × 3 戦略 × 5 trials) | 約 45 秒 |
+
+## 6. フル設定（scale-up smoke）での結果
+
+実施日: 2026-05-04 / scale-up smoke 設定（5 seeds × 3 戦略 × n_trials=10 × 500 世帯、150 SA runs、約 8 分）。
+
+### 6.1 戦略別の seed 平均（`expected-full/strategy_metrics.csv`）
+
+| strategy | statistical_fit_mean | utility_proxy_mean | privacy_proxy_mean | composite_mean |
+|---|---:|---:|---:|---:|
+| pareto | 2377.8 | 0.8096 | 0.0 | **0.5990** |
+| random_search | 2263.8 | 0.7708 | 0.0 | **0.5233** |
+| rule_based | 2263.8 | 0.7708 | 0.0 | **0.5895** |
+
+### 6.2 解釈
+
+- **5 倍規模 × 倍 trials でも random_search が composite_mean で最良**（0.5233）。CI 軽量設定（trials=5）の「想定外の負の知見」が、より大きな設定でも維持された
+- pareto は statistical_fit_mean=2377.8 と他 2 戦略（2263.8）より約 5% 悪い。pareto strategy が「3 軸での非劣解近傍を選ぶ」性質上、statistical_fit を犠牲にして他軸を保つトレードオフを許容するため、composite が改善しない設計仮説と整合する
+- rule_based は statistical_fit / utility_proxy が random_search と全く同値（n=10 trials 全てが「base settings そのまま」を 1 回は通る構造のため、min が拾われると base に張り付く）
+- **改善ループの優位性は、より長い trial 数（>20）または 3 軸の重み付け再設計（spec §14.4 改訂）が必要**であることが、scale-up smoke でさらに明確化された。これは spec §14.4 / experiment_plan §15.3 の H3 系仮説への重要な負の知見

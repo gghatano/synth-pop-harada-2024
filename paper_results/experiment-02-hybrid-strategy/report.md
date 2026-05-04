@@ -56,9 +56,31 @@ age-swap だけが他 2 戦略から有意に高い best_score（=悪い）を�
 - 100 世帯では age_change が早期に最適に張り付くため、hybrid の利点を観測しづらい
 - p_change スケジュールは固定（0.8 → 0.2 線形）。Murata 2017 §5.2 のように複数スケジュールを比較する設計拡張は別 Issue 候補
 
-## 5. 再現コマンド
+## 5. フル設定（scale-up smoke）での結果
+
+実施日: 2026-05-04 / scale-up smoke 設定（5 seeds × evals=2000 × 500 世帯 × 3 戦略、15 SA runs、約 8 分）。
+
+### 5.1 best_score 一覧
+
+| seed | age_change | age_swap | hybrid |
+|---:|---:|---:|---:|
+| 1 | 2260.0 | 2833.0 | 2260.0 |
+| 2 | 2262.0 | 2831.0 | 2261.0 |
+| 3 | 2260.0 | 2832.0 | 2260.0 |
+| 4 | 2261.0 | 2833.0 | 2261.0 |
+| 5 | 2260.0 | 2832.0 | 2260.0 |
+| **平均** | **2260.6** | **2832.2** | **2260.4** |
+
+### 5.2 解釈
+
+- 500 世帯規模に拡大しても、**hybrid は age_change と統計的に区別不能**（差 ≤ 0.2）。100 世帯での観察が 5 倍規模でも維持される
+- H2（hybrid > age_change を含む単独戦略）は本 scale-up smoke でも支持されず、`p_change` スケジュール（線形 0.8 → 0.2）が age_change 主導から抜け出せない構造を残しているという解釈が強化された
+- age_swap の劣位は 500 世帯 × evals=2000 でも顕著で、Murata 2017 の H1b（age_swap 逆転）には evals=16000 級が必要とみられる
+- 退行検出には十分機能する。`expected-full/best_scores.csv` で CI と同等の bitwise 一致を担保
+
+## 6. 再現コマンド
 
 ```bash
 make paper-results-exp02
-PYTHONPATH=. uv run python paper_results/experiment-02-hybrid-strategy/run.py --full --write-expected
+PYTHONPATH=. uv run python paper_results/experiment-02-hybrid-strategy/run.py --full --write-expected   # scale-up smoke
 ```

@@ -16,7 +16,9 @@
 | 各実験の入力条件・seed・コミット SHA | 各ディレクトリの `INPUT.md` |
 | 各実験の解釈と統計検定 | 各ディレクトリの `report.md` |
 
-各 `expected/*.csv` は **CI 軽量設定**（実験 1: n=3 seeds × 100 世帯 × evals 2 水準 / 実験 2: 同 1 水準 / 実験 3: 3 seeds × 3 戦略 × 5 trials × 100 世帯 / 実験 4: 5 seeds × 5 trials × 100 世帯）の出力です。論文値の最終固定版は `expected-full/`（実験 1 / 2 のみ、n=10 / 5 水準 / 1000 世帯）に置く設計で、`make paper-results-full` を `workflow_dispatch` 経由で走らせて生成します。
+各 `expected/*.csv` は **CI 軽量設定**（実験 1: n=3 seeds × 100 世帯 × evals 2 水準 / 実験 2: 同 1 水準 / 実験 3: 3 seeds × 3 戦略 × 5 trials × 100 世帯 / 実験 4: 5 seeds × 5 trials × 100 世帯）の出力です。論文値の最終固定版は `expected-full/`（CI の 3〜5 倍規模で、4 実験すべて）に置く設計で、`make paper-results-full` を経由して生成します。
+
+> **scale-up smoke にとどめている理由**: spec §15 凍結値（n=10 / 5 evals 水準 / 1000 世帯）で 4 実験全走させると 1 日以上を要する（age_swap が 1000 世帯 × evals=16000 で 1 SA 約 1 時間、実測）。当面は CI の 3〜5 倍規模（n=5 / 3 evals 水準 / 500 世帯 / n_trials=10）に絞ったフル設定で `expected-full/` を凍結する。論文値の完全再現は別 Issue で 1 日以上のタイムスロット確保時に着手する。
 
 ## 2. なぜ固定するか
 
@@ -65,6 +67,16 @@ make paper-results-exp04
 | experiment-04 | 25 | 約 27 秒 |
 | 合計 | 91 | 約 9.5〜10 分 |
 
+実測時間（**scale-up smoke** フル設定、ローカル WSL2、PR #123 で計測）:
+
+| 実験 | runs | 設定 | 所要時間 |
+|---|---:|---|---:|
+| experiment-01 | 30 (5 seeds × 3 evals × 2 transitions) | n=5 / 1000–4000 evals / 500 世帯 | 約 80 分 |
+| experiment-02 | 15 (5 seeds × 3 transitions) | n=5 / 2000 evals / 500 世帯 | 約 30 分 |
+| experiment-03 | 150 (5 seeds × 3 戦略 × 10 trials) | n=5 / n_trials=10 / 500 世帯 | 約 25 分 |
+| experiment-04 | 50 (5 seeds × 10 trials) | n=5 / n_trials=10 / 500 世帯 | 約 8 分 |
+| 合計 | 245 | scale-up smoke | 約 2.5 時間 |
+
 ### 4.2 期待値の更新（手動）
 
 数値を更新したいときは `--write-expected` モードで上書きします。レビュー必須。
@@ -76,10 +88,11 @@ make paper-results-write
 ### 4.3 フル設定（重実験、ローカル / workflow_dispatch のみ）
 
 ```bash
-make paper-results-full
+make paper-results-full          # 既存 expected-full と一致するか判定
+make paper-results-write-full    # expected-full/*.csv を再生成
 ```
 
-n=10 seeds × 5 evals 水準 × 1000 世帯。通常 1〜2 時間かかるため CI では走らせません。GitHub Actions の `paper-results` workflow を `workflow_dispatch` で `full=true` にすると CI 上でも実行できます。
+scale-up smoke（n=5 seeds × 3 evals 水準 × 500 世帯 / n_trials=10）。実測で 4 実験合計 約 2.5 時間。論文値の完全再現は別 Issue で。
 
 ## 5. 退行（数値ずれ）が出たとき
 

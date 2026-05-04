@@ -10,6 +10,7 @@ bootstrap percentile CI を `expected/variance_summary.csv` にまとめる。
 ----------
 - ``--write-expected``: 期待値 CSV を上書き保存（手動更新時のみ）
 - ``--check-tolerance``: 既存 expected との許容幅判定（既定）
+- ``--full``: フル設定（n=10 seeds / n_trials=20 / 1000 世帯）を `expected-full/` で使う
 """
 
 from __future__ import annotations
@@ -34,6 +35,14 @@ BASE_CONFIG = REPO_ROOT / "configs" / "improve_quick.yaml"
 #: CI 既定設定（plan 確定値）。25 SA runs ≈ 2〜3 分。
 CI_SEEDS: tuple[int, ...] = (1, 2, 3, 4, 5)
 CI_N_TRIALS: int = 5
+CI_HOUSEHOLDS: int = 100
+
+#: フル設定（spec §15.4 / experiment_plan.md 推奨値の代わりに、当面は
+#: **scale-up smoke**（n=5 / n_trials=10 / 500 世帯）で実施する。論文値の
+#: 完全再現は別 Issue で別途タイムスロット確保（exp03 と同じ理由）。
+FULL_SEEDS: tuple[int, ...] = (1, 2, 3, 4, 5)
+FULL_N_TRIALS: int = 10
+FULL_HOUSEHOLDS: int = 500
 
 #: 戦略は rule_based 固定。
 STRATEGY: str = "rule_based"
@@ -62,12 +71,14 @@ def _run_grid(
     seeds: tuple[int, ...],
     n_trials: int,
     output_root: Path,
+    n_households: int,
 ) -> pd.DataFrame:
     """Seeds × trials の格子点で improve loop を走らせ、結果を 1 つの DataFrame に."""
     frames: list[pd.DataFrame] = []
     for seed in seeds:
         print(
-            f"[exp04] seed={seed} strategy={STRATEGY} n_trials={n_trials} ...",
+            f"[exp04] seed={seed} strategy={STRATEGY} n_trials={n_trials} "
+            f"n_households={n_households} ...",
             flush=True,
         )
         df = run_improve_for_paper_results(
@@ -76,6 +87,7 @@ def _run_grid(
             n_trials=n_trials,
             seed=seed,
             output_root=output_root,
+            n_households=n_households,
         )
         print(
             f"[exp04]   trials={len(df)} min_best_score={df['best_score'].min():.1f}",
@@ -166,12 +178,26 @@ def _write_csv(df: pd.DataFrame, path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _output_dir() -> Path:
-    return EXPERIMENT_DIR / "expected"
+def _output_dir(*, full: bool = False) -> Path:
+    """Return the directory that holds expected CSVs.
+
+    Parameters
+    ----------
+    full : bool
+        ``True`` のときフル設定用の ``expected-full/`` を返す。
+    """
+    return EXPERIMENT_DIR / ("expected-full" if full else "expected")
 
 
-def _do_run(*, write: bool, summary_out: Path | None) -> int:
-    out_dir = _output_dir()
+def _config(*, full: bool) -> tuple[tuple[int, ...], int, int]:
+    """``--full`` の有無で seeds / n_trials / n_households を返す."""
+    if full:
+        return FULL_SEEDS, FULL_N_TRIALS, FULL_HOUSEHOLDS
+    return CI_SEEDS, CI_N_TRIALS, CI_HOUSEHOLDS
+
+
+def _do_run(*, write: bool, full: bool, summary_out: Path | None) -> int:
+    out_dir = _output_dir(full=full)
     expected_trials = out_dir / "trial_metrics.csv"
     expected_summary = out_dir / "variance_summary.csv"
 
@@ -180,12 +206,14 @@ def _do_run(*, write: bool, summary_out: Path | None) -> int:
         print(msg, file=sys.stderr)
         return 2
 
+    seeds, n_trials, n_households = _config(full=full)
     with TemporaryDirectory() as tmp:
         tmp_root = Path(tmp) / "improve"
         all_trials = _run_grid(
-            seeds=CI_SEEDS,
-            n_trials=CI_N_TRIALS,
+            seeds=seeds,
+            n_trials=n_trials,
             output_root=tmp_root,
+            n_households=n_households,
         )
 
     trials_df = _format_trial_metrics(all_trials)
@@ -239,6 +267,11 @@ def main(argv: list[str] | None = None) -> int:
         help="run grid and compare against expected/ (default behaviour)",
     )
     parser.add_argument(
+        "--full",
+        action="store_true",
+        help="use full config (n=10 seeds / n_trials=20 / 1000 households)",
+    )
+    parser.add_argument(
         "--summary-out",
         type=Path,
         default=None,
@@ -246,7 +279,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    return _do_run(write=args.write_expected, summary_out=args.summary_out)
+    return _do_run(write=args.write_expected, full=args.full, summary_out=args.summary_out)
 
 
 if __name__ == "__main__":

@@ -12,6 +12,7 @@ random_search の 3 戦略を同一 seed セット × 同一 n_trials で並べ�
 ----------
 - ``--write-expected``: 期待値 CSV を上書き保存（手動更新時のみ）
 - ``--check-tolerance``: 既存 expected との許容幅判定（既定）
+- ``--full``: フル設定（n=10 / n_trials=20 / 1000 世帯）を `expected-full/` で使う
 """
 
 from __future__ import annotations
@@ -32,6 +33,16 @@ BASE_CONFIG = REPO_ROOT / "configs" / "improve_quick.yaml"
 #: CI 既定設定（plan 確定値）。45 SA runs ≈ 5〜8 分。
 CI_SEEDS: tuple[int, ...] = (1, 2, 3)
 CI_N_TRIALS: int = 5
+CI_HOUSEHOLDS: int = 100
+
+#: フル設定（spec §15.3 / experiment_plan.md 推奨値の代わりに、当面は
+#: **scale-up smoke**（n=5 / n_trials=10 / 500 世帯）で実施する。改善ループ
+#: の `evals_per_agent=200` は短いが、500 世帯 × 10 trials × 3 戦略 × 5 seed =
+#: 150 SA run になるため、CI 軽量設定の 3 倍強の計算量。論文値の完全再現
+#: （n=10 / n_trials=20 / 1000 世帯）は別 Issue で。
+FULL_SEEDS: tuple[int, ...] = (1, 2, 3, 4, 5)
+FULL_N_TRIALS: int = 10
+FULL_HOUSEHOLDS: int = 500
 
 #: 比較する 3 戦略。
 STRATEGIES: tuple[str, ...] = ("rule_based", "pareto", "random_search")
@@ -48,13 +59,15 @@ def _run_grid(
     strategies: tuple[str, ...],
     n_trials: int,
     output_root: Path,
+    n_households: int,
 ) -> pd.DataFrame:
     """Seeds × strategies の格子点で improve loop を走らせ、結果を 1 つの DataFrame に."""
     frames: list[pd.DataFrame] = []
     for seed in seeds:
         for strategy in strategies:
             print(
-                f"[exp03] seed={seed} strategy={strategy} n_trials={n_trials} ...",
+                f"[exp03] seed={seed} strategy={strategy} n_trials={n_trials} "
+                f"n_households={n_households} ...",
                 flush=True,
             )
             df = run_improve_for_paper_results(
@@ -63,6 +76,7 @@ def _run_grid(
                 n_trials=n_trials,
                 seed=seed,
                 output_root=output_root,
+                n_households=n_households,
             )
             print(
                 f"[exp03]   trials={len(df)} min_best_score={df['best_score'].min():.1f}",
@@ -152,13 +166,26 @@ def _write_csv(df: pd.DataFrame, path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _output_dir() -> Path:
-    """Return the directory that holds expected CSVs."""
-    return EXPERIMENT_DIR / "expected"
+def _output_dir(*, full: bool = False) -> Path:
+    """Return the directory that holds expected CSVs.
+
+    Parameters
+    ----------
+    full : bool
+        ``True`` のときフル設定用の ``expected-full/`` を返す。
+    """
+    return EXPERIMENT_DIR / ("expected-full" if full else "expected")
 
 
-def _do_run(*, write: bool, summary_out: Path | None) -> int:
-    out_dir = _output_dir()
+def _config(*, full: bool) -> tuple[tuple[int, ...], int, int]:
+    """``--full`` の有無で seeds / n_trials / n_households を返す."""
+    if full:
+        return FULL_SEEDS, FULL_N_TRIALS, FULL_HOUSEHOLDS
+    return CI_SEEDS, CI_N_TRIALS, CI_HOUSEHOLDS
+
+
+def _do_run(*, write: bool, full: bool, summary_out: Path | None) -> int:
+    out_dir = _output_dir(full=full)
     expected_best = out_dir / "best_scores.csv"
     expected_metrics = out_dir / "strategy_metrics.csv"
 
@@ -167,13 +194,15 @@ def _do_run(*, write: bool, summary_out: Path | None) -> int:
         print(msg, file=sys.stderr)
         return 2
 
+    seeds, n_trials, n_households = _config(full=full)
     with TemporaryDirectory() as tmp:
         tmp_root = Path(tmp) / "improve"
         all_trials = _run_grid(
-            seeds=CI_SEEDS,
+            seeds=seeds,
             strategies=STRATEGIES,
-            n_trials=CI_N_TRIALS,
+            n_trials=n_trials,
             output_root=tmp_root,
+            n_households=n_households,
         )
 
     best_df = _format_best_scores(all_trials)
@@ -227,6 +256,11 @@ def main(argv: list[str] | None = None) -> int:
         help="run grid and compare against expected/ (default behaviour)",
     )
     parser.add_argument(
+        "--full",
+        action="store_true",
+        help="use full config (n=10 seeds / n_trials=20 / 1000 households)",
+    )
+    parser.add_argument(
         "--summary-out",
         type=Path,
         default=None,
@@ -234,7 +268,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    return _do_run(write=args.write_expected, summary_out=args.summary_out)
+    return _do_run(write=args.write_expected, full=args.full, summary_out=args.summary_out)
 
 
 if __name__ == "__main__":

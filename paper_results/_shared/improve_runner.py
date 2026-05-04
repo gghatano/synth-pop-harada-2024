@@ -24,6 +24,7 @@ experiment-03（戦略比較）と experiment-04（複数候補ばらつき）�
 from __future__ import annotations
 
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING, cast
 
 import pandas as pd
@@ -107,6 +108,7 @@ def run_improve_for_paper_results(
     n_trials: int,
     seed: int,
     output_root: Path,
+    n_households: int | None = None,
 ) -> pd.DataFrame:
     """1 戦略 × 1 seed × n_trials の improve loop を回し metrics を DataFrame で返す.
 
@@ -122,6 +124,11 @@ def run_improve_for_paper_results(
         SA / 戦略の root seed。
     output_root : Path
         improve loop 出力ルート（``output_root/<strategy>_seed<seed>/`` 以下）。
+    n_households : int | None
+        フル設定時の世帯数（100 の倍数）。``None`` または既定の 100 のときは
+        ``base_config_path`` の ``input_dir`` を素直に使う。100 以外を渡した
+        ときは ``data/sample_case/`` を整数倍スケールして tmp に書き出し、
+        improve loop の入力を差し替える。
 
     Returns
     -------
@@ -137,17 +144,61 @@ def run_improve_for_paper_results(
     base_settings = Settings.from_yaml(base_config_path)
     # 入力ディレクトリを絶対パス化（CI の cwd ずれに強くする）
     input_abs = _resolve_input_dir(base_config_path, base_settings)
-    base_settings = base_settings.model_copy(
+
+    # 100 世帯（既定）以外を要求された場合のみスケール処理を行う。
+    # _scale_sample_case は data/sample_case/ を整数倍スケールするため、
+    # 100 の倍数のみ受け付ける。100 のときは何もせず素通しにすれば、
+    # CI 既定の挙動（既存 expected/*.csv の値）と一致する。
+    if n_households is None or n_households == 100:
+        df = _run_with_input(
+            base_settings=base_settings,
+            input_dir=input_abs,
+            output_root=output_root,
+            seed=seed,
+            strategy_name=strategy_name,
+            n_trials=n_trials,
+        )
+    else:
+        # 遅延 import で循環参照を避ける（runner.py も improve_runner.py も
+        # paper_results._shared 配下に同居しているため、トップレベル import は
+        # 順序依存になる）。
+        from paper_results._shared.runner import scale_sample_case
+
+        with TemporaryDirectory() as tmp:
+            scaled = Path(tmp) / "scaled_input"
+            scale_sample_case(n_households, scaled)
+            df = _run_with_input(
+                base_settings=base_settings,
+                input_dir=scaled,
+                output_root=output_root,
+                seed=seed,
+                strategy_name=strategy_name,
+                n_trials=n_trials,
+            )
+    return df
+
+
+def _run_with_input(
+    *,
+    base_settings: Settings,
+    input_dir: Path,
+    output_root: Path,
+    seed: int,
+    strategy_name: str,
+    n_trials: int,
+) -> pd.DataFrame:
+    """input_dir を差し替えて improve loop を 1 回回し DataFrame を組み立てる."""
+    settings = base_settings.model_copy(
         update={
             "seed": int(seed),
-            "input_dir": input_abs,
+            "input_dir": input_dir.resolve(),
             "output_dir": output_root.resolve(),
         },
     )
 
     strategy_typed = cast(StrategyName, strategy_name)
     result = run_improve_loop(
-        base_settings,
+        settings,
         strategy_name=strategy_typed,
         n_trials=n_trials,
         seed=int(seed),

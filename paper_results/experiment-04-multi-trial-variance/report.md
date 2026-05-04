@@ -78,3 +78,23 @@ make paper-results-write            # expected/*.csv 再生成（手動更新）
 | 実験 | runs | 所要時間 |
 |---|---:|---:|
 | experiment-04 | 25 (5 seeds × 5 trials) | 約 27 秒 |
+
+## 6. フル設定（scale-up smoke）での結果
+
+実施日: 2026-05-04 / scale-up smoke 設定（5 seeds × n_trials=10 × 500 世帯、50 SA runs、約 5 分）。
+
+### 6.1 variance_summary（`expected-full/variance_summary.csv`）
+
+| metric | seed_mean | seed_std | seed_cv | bootstrap_ci_low | bootstrap_ci_high |
+|---|---:|---:|---:|---:|---:|
+| best_score | 2265.94 | 1.544 | **0.0007 (0.07%)** | 2265.54 | 2266.36 |
+| statistical_fit | 2265.94 | 1.544 | 0.0007 | 2265.50 | 2266.38 |
+| utility_proxy | 0.7715 | 0.00053 | 0.0007 | 0.7714 | 0.7717 |
+| privacy_proxy | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 |
+
+### 6.2 解釈
+
+- **5 倍規模（500 世帯）× 倍 trials（n=10）でも CV ≤ 0.07%** と非常に安定。CI 軽量設定（CV 0.12%）と比べて若干小さくなり、`use_zero_error_init=True` が大規模でも初期値を強く支配することを示唆
+- bootstrap 95% CI 幅は best_score で ±0.4（< 0.02%）と極小。**H4（複数候補ばらつきは安定）はフル設定でも強く支持される**
+- privacy_proxy は 500 世帯規模でも 0 で固定（rare cell が観測されない）。秘匿性ばらつきの実体評価には DCR / NNDR / ARD（Issue #99 family）が必要
+- 結論: **後続実験で `seed_n=3〜5` を採用する根拠**として scale-up smoke でも維持された。改善ループ層の比較実験（exp03）が `random_search に勝てない` 構造的問題を解消するには、trial 数の拡大か composite 重み再設計が必要（exp03 §6.2 参照）であって、seed 数の増加では解決しない

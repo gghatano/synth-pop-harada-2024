@@ -1,0 +1,5 @@
+metric,seed_mean,seed_std,seed_cv,bootstrap_ci_low,bootstrap_ci_high
+best_score,2265.94,1.544047,0.000681,2265.54,2266.36
+statistical_fit,2265.94,1.544047,0.000681,2265.5,2266.38
+utility_proxy,0.771515,0.000526,0.000681,0.771379,0.771665
+privacy_proxy,0.0,0.0,0.0,0.0,0.0
