@@ -93,7 +93,15 @@
 
 - Welch's t test + Holm 補正
 
-**Phase 3 着手前に埋める。**
+### 改善ループ設定（Issue #119 で実装したもの）
+
+- `synthpop-jp improve --strategy {rule_based,pareto,random_search} --trials N --seed S` を 3 戦略 × seed 群（n=10〜30）で回す
+- ベース config: `configs/base.yaml`（評価軸の bias を避けるため strict_extended は別実験で検証）
+- 改善対象 4 軸: `transition_kind` / `alpha` / `evals_per_agent` / `p_change`（spec §14.2）
+- 出力: `outputs/improve/<strategy>_seed<S>/`（`best_config.yaml` / `summary.md` / pareto 時は `pareto_front.md`）
+- 比較対象: 各 run の `summary.md` と `metrics.json` 集約。`compare` コマンドで Welch's t + Holm 補正
+
+**実体化（paper_results/experiment-03-improve-strategy-comparison/）は Issue #119 の後続 Issue で着手する。**
 
 ## 実験 4（§15.4）: 複数候補のばらつき
 
@@ -110,7 +118,12 @@
 
 - 変動係数の bootstrap CI 比較
 
-**Phase 3 着手前に埋める。**
+### 改善ループ設定
+
+- 単一 strategy（`rule_based` または `pareto`）を seed 群（n=10〜30）で回す
+- 集約は `summary.md` と各 trial の `metrics.json` を seed 横断で stack し、`tests/compare/` の bootstrap CI 関数で変動係数の信頼区間を出す
+
+**実体化は後続 Issue（experiment-04-multi-trial-variance/）で着手。**
 
 ## shadow seed 群の運用
 
