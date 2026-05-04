@@ -93,15 +93,20 @@
 
 - Welch's t test + Holm 補正
 
-### 改善ループ設定（Issue #119 で実装したもの）
+### 改善ループ設定（Issue #119 で実装、Issue #121 で paper_results 化済）
 
-- `synthpop-jp improve --strategy {rule_based,pareto,random_search} --trials N --seed S` を 3 戦略 × seed 群（n=10〜30）で回す
-- ベース config: `configs/base.yaml`（評価軸の bias を避けるため strict_extended は別実験で検証）
+- `synthpop-jp improve --strategy {rule_based,pareto,random_search} --trials N --seed S` を 3 戦略 × seed 群で回す
+- ベース config: `configs/improve_quick.yaml`（CI 軽量、`evals_per_agent=200`, `max_iters=50000`）
 - 改善対象 4 軸: `transition_kind` / `alpha` / `evals_per_agent` / `p_change`（spec §14.2）
 - 出力: `outputs/improve/<strategy>_seed<S>/`（`best_config.yaml` / `summary.md` / pareto 時は `pareto_front.md`）
 - 比較対象: 各 run の `summary.md` と `metrics.json` 集約。`compare` コマンドで Welch's t + Holm 補正
 
-**実体化（paper_results/experiment-03-improve-strategy-comparison/）は Issue #119 の後続 Issue で着手する。**
+### サンプルサイズと停止条件（Issue #121 で確定）
+
+- **CI 軽量設定**（`make paper-results-exp03`）: seeds=[1,2,3] × n_trials=5 × 3 戦略 = 45 SA runs / 100 世帯。実測 約 45 秒
+- **停止条件**: 各 trial の SA は `max_iters = evals_per_agent × n_persons` の上限到達で打ち切り（target_threshold=0、early-stop なし）
+- **期待値の固定先**: `paper_results/experiment-03-improve-strategy-comparison/expected/{best_scores.csv, strategy_metrics.csv}`
+- **論文値固定（フル設定）**: 後続 Issue で 1000 世帯 + n_seeds=10 へ拡張
 
 ## 実験 4（§15.4）: 複数候補のばらつき
 
@@ -118,12 +123,17 @@
 
 - 変動係数の bootstrap CI 比較
 
-### 改善ループ設定
+### 改善ループ設定（Issue #121 で paper_results 化済）
 
-- 単一 strategy（`rule_based` または `pareto`）を seed 群（n=10〜30）で回す
-- 集約は `summary.md` と各 trial の `metrics.json` を seed 横断で stack し、`tests/compare/` の bootstrap CI 関数で変動係数の信頼区間を出す
+- 単一 strategy（`rule_based`）を seed 群で回す
+- 集約は `summary.md` と各 trial の `metrics.json` を seed 横断で stack し、`synthpop_jp.compare.stats.bootstrap_ci`（n_bootstrap=2000, 95% CI, 固定 RNG seed=42）で変動係数の信頼区間を出す
 
-**実体化は後続 Issue（experiment-04-multi-trial-variance/）で着手。**
+### サンプルサイズと停止条件（Issue #121 で確定）
+
+- **CI 軽量設定**（`make paper-results-exp04`）: seeds=[1..5] × n_trials=5 = 25 SA runs / 100 世帯。実測 約 27 秒
+- **停止条件**: 実験 3 と同じ（max_iters 上限）
+- **期待値の固定先**: `paper_results/experiment-04-multi-trial-variance/expected/{trial_metrics.csv, variance_summary.csv}`
+- **実測知見**: 4 指標すべて CV ≤ 0.12% で H4 の安定化仮説を強く支持。後続実験で seed n=3 でも十分という設計判断ができる
 
 ## shadow seed 群の運用
 

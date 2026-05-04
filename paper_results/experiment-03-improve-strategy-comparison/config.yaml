@@ -1,0 +1,37 @@
+# 実験 03: 改善ループ 3 戦略比較の固定設定
+#
+# このファイルは記録用です。`run.py` は値を直接 hardcode しています
+# （改善ループ自体の base settings は `configs/improve_quick.yaml` 側）。
+#
+# spec §14（改善ループ）+ Issue #121 plan に対応。
+
+# --- 共通設定 ---
+seed_root_list: [1, 2, 3]   # CI 既定
+n_trials: 5                 # 戦略あたりの試行数
+n_households: 100
+
+# 改善対象の 4 軸（synthpop_jp.improve.strategy._apply_annealing_overrides で上書きされる）
+improve_axes:
+  - p_change
+  - evals_per_agent
+  - alpha
+  - transition_kind
+
+# 評価する戦略
+strategies:
+  - rule_based
+  - pareto
+  - random_search
+
+# base settings は configs/improve_quick.yaml を参照
+base_config: configs/improve_quick.yaml
+
+# 期待値 CSV の配置
+expected_paths:
+  best_scores: expected/best_scores.csv
+  strategy_metrics: expected/strategy_metrics.csv
+
+# 許容幅（spec §19.4）。strategy_metrics は seed 平均で揺らぎが大きいため utility 帯（±5%）。
+tolerance:
+  best_score: 0.01
+  utility: 0.05
