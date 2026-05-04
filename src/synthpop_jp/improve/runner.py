@@ -24,7 +24,6 @@ from typing import Literal
 
 from synthpop_jp.config import Settings
 
-
 StrategyName = Literal["rule_based", "pareto", "random_search"]
 ObjectiveName = Literal["composite", "statistical_fit", "utility", "privacy"]
 

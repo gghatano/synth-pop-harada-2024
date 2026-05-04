@@ -153,4 +153,90 @@ class RandomSearchStrategy:
 
 # --- Step 2 / 4 で実装される戦略は同ファイル内に追記する想定 ---
 
+
+# ルール発火の閾値。spec §14.3 の if-then ルールを最小実装として落とし込む。
+RULE_PARENT_CHILD_L1_THRESHOLD = 1.0
+RULE_DEMOGRAPHIC_L1_THRESHOLD = 0.5
+RULE_UNIQUE_RATE_THRESHOLD = 0.3
+RULE_SLOW_CONVERGENCE_THRESHOLD = 0.3  # improvement < 30% → 収束遅
+# 各ルールが 1 trial あたりに動かす量。微調整で発散しないよう保守的に。
+RULE_P_CHANGE_DELTA = 0.1
+RULE_EVALS_FACTOR = 0.7  # rare cell unique 高 → evals を 0.7 倍
+RULE_EVALS_FLOOR = 5  # evals_per_agent はこの値より下げない
+RULE_ALPHA_DELTA = 0.001
+RULE_ALPHA_CEIL = 0.9999  # alpha は 1.0 ぴったりにしない（冷却が止まるため）
+
+
+class RuleBasedStrategy:
+    """spec §14.3 の if-then ルールベース改善戦略.
+
+    history の **直近 trial の metrics** を見て次の config を決定する純粋関数。
+    history が空のときは ``base_settings`` をそのまま返す。
+
+    対応するルール:
+
+    1. 親子年齢差 L1 が大きい → ``p_change`` 上昇（age-change 比率を上げる）
+    2. demographic 小だが親族関係大 → ``p_change`` 低下（age-swap 比率を上げる）
+    3. rare cell unique 率高 → ``evals_per_agent`` 減少（過学習を避ける）
+    4. 収束遅（improvement < 30%）→ ``alpha`` 上昇（温度減衰を緩める）
+
+    Parameters
+    ----------
+    base_settings : Settings
+        改変前の Settings。各ルールはこの annealing を起点として差分を加える。
+    seed : int
+        本戦略は決定論的なので seed は使われないが、API 一貫性のため受け取る。
+    """
+
+    def __init__(self, base_settings: Settings, *, seed: int = 42) -> None:
+        del seed  # 本戦略は乱数を使わない
+        self._base = base_settings
+
+    def next_config(self, history: Sequence[TrialResult]) -> Settings:
+        """直近 trial のメトリクスから 4 ルールを順番に適用."""
+        if not history:
+            return self._base
+
+        latest = history[-1]
+        m = latest.metrics
+
+        # 現在の改善対象 4 軸の値（base から開始し、ルールで上書きする）
+        ann = self._base.annealing
+        p_change = float(ann.p_change)
+        evals_per_agent = int(ann.evals_per_agent)
+        alpha = float(ann.alpha)
+        transition_kind = ann.transition_kind
+
+        # ルール 1 / 2: parent_child / demographic の比較で p_change を動かす
+        pc_l1 = float(m.get("aggregate.l1.parent_child", 0.0))
+        demo_l1 = float(m.get("aggregate.l1.demographic", 0.0))
+        if pc_l1 > RULE_PARENT_CHILD_L1_THRESHOLD:
+            # 親子年齢差大 → age-change を増やす
+            p_change = min(1.0, p_change + RULE_P_CHANGE_DELTA)
+        elif demo_l1 < RULE_DEMOGRAPHIC_L1_THRESHOLD and pc_l1 > demo_l1 * 2.0:
+            # demographic 小だが親族関係（ここでは parent_child の相対大）大 → age-swap を増やす
+            p_change = max(0.0, p_change - RULE_P_CHANGE_DELTA)
+
+        # ルール 3: rare cell unique 率が高い → evals_per_agent を下げる
+        unique_rate = float(m.get("rare_cell.unique_rate", 0.0))
+        if unique_rate > RULE_UNIQUE_RATE_THRESHOLD:
+            evals_per_agent = max(RULE_EVALS_FLOOR, int(evals_per_agent * RULE_EVALS_FACTOR))
+
+        # ルール 4: improvement < 30% → alpha を上げて冷却を緩める
+        initial = float(m.get("initial_score", 0.0))
+        best = float(m.get("best_score", 0.0))
+        if initial > 0.0:
+            improvement = 1.0 - best / initial
+            if improvement < RULE_SLOW_CONVERGENCE_THRESHOLD:
+                alpha = min(RULE_ALPHA_CEIL, alpha + RULE_ALPHA_DELTA)
+
+        return _apply_annealing_overrides(
+            self._base,
+            p_change=p_change,
+            evals_per_agent=evals_per_agent,
+            alpha=alpha,
+            transition_kind=transition_kind,
+        )
+
+
 RuleName = Literal["large_parent_child_l1", "high_unique_rate", "slow_convergence"]

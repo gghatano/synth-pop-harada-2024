@@ -15,16 +15,21 @@
 
 from __future__ import annotations
 
+from synthpop_jp.improve.runner import ImproveLoopResult, TrialResult
 from synthpop_jp.improve.strategy import (
     DEFAULT_PARAM_RANGES,
     DEFAULT_TRANSITION_CHOICES,
     ImproveStrategy,
     RandomSearchStrategy,
+    RuleBasedStrategy,
 )
 
 __all__ = [
     "DEFAULT_PARAM_RANGES",
     "DEFAULT_TRANSITION_CHOICES",
+    "ImproveLoopResult",
     "ImproveStrategy",
     "RandomSearchStrategy",
+    "RuleBasedStrategy",
+    "TrialResult",
 ]
