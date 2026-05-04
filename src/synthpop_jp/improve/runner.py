@@ -366,8 +366,19 @@ def _run_one_trial(
 
 
 def _settings_to_yaml_dict(settings: Settings) -> dict[str, object]:
-    """Convert Settings into a YAML-serialisable dict (Path → str)."""
-    return settings.model_dump(mode="json")
+    """Convert Settings into a YAML-serialisable dict (Path → str).
+
+    決定性のため、絶対パス（``input_dir`` / ``output_dir`` / ``family_type_mapping``）
+    は **basename のみ** に正規化する。これにより、同一 seed × 同一戦略で
+    異なる tmp_path から呼ばれても ``best_config.yaml`` が bitwise 一致する。
+    元の絶対パスは ``summary.md`` に書く。
+    """
+    raw = settings.model_dump(mode="json")
+    for key in ("input_dir", "output_dir", "family_type_mapping"):
+        v = raw.get(key)
+        if isinstance(v, str):
+            raw[key] = Path(v).name  # basename だけ残す
+    return raw
 
 
 def _write_summary_md(
