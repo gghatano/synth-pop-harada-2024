@@ -60,22 +60,10 @@ description: 自己レビュー済みの変更を `develop` 向けの PR にす�
    - 指摘を受けたら feature ブランチに commit する（force push は基本しない）
    - コメントに返信する際、対応コミット SHA を添える
    - 追加実装があれば段階 2 / 3 に戻り、再度自己レビューしてから Ready 更新
-7. **squash merge**
-   ```bash
-   gh pr merge <番号> --squash --delete-branch
-   ```
-   - `--squash` は本リポジトリの既定（`docs/rules/branch-strategy.md` §5 参照）
-   - `--delete-branch` はリモートの feature ブランチを消す。ローカル worktree が使用中の場合は **ローカル削除のみ失敗** してリモートは消える（想定内）
-8. **merge 後の後片付け**（詳細: [`docs/rules/git-worktree.md`](../../docs/rules/git-worktree.md) §3.5）
-   ```bash
-   cd <repo_root>
-   git worktree remove gitworktree/feature-<issue番号>-<keyword>
-   git branch -D feature/<issue番号>-<keyword>   # ローカルが残っていれば
-   git checkout develop
-   git pull --ff-only
-   ```
-   - 対応 Issue は PR 本文の `Closes #<番号>` で自動 close
-   - HTML レポートの公開場所（もしあれば）にデプロイするコマンドを実行
+
+> **注記**: merge と worktree 片付けは [`5_merge_and_cleanup.md`](5_merge_and_cleanup.md) に分離された。
+> 本 skill は **PR 作成 → Draft → Ready 切替まで** を所掌する。
+> merge は `make merge-pr PR=<N>` 1 コマンドで完結する（`gh pr merge --squash` を直接叩かない）。
 
 ## 出力物
 
@@ -90,7 +78,8 @@ description: 自己レビュー済みの変更を `develop` 向けの PR にす�
 - [ ] CI がすべて green（手元で 4 コマンドが通り、GitHub Actions でも通った）
 - [ ] 実験がある場合 HTML レポートへのリンクが本文にある
 - [ ] Issue と PR が相互にリンクされている（`Closes #<番号>`）
-- [ ] Draft → Ready → squash merge → worktree 片付け、までが完了している
+- [ ] Draft → Ready 化が完了している（CI 緑の状態で Ready）
+- [ ] 以後の squash merge / worktree 片付けは [`5_merge_and_cleanup.md`](5_merge_and_cleanup.md) で行う
 
 ## 注意点
 
@@ -147,3 +136,5 @@ description: 自己レビュー済みの変更を `develop` 向けの PR にす�
 - Issue: PR へのリンクと、段階 3 のレビューサマリが両方ある状態
 - PR: 上記テンプレをすべて埋めた状態で Ready になっている
 - HTML レポート: PR 本文から 1 クリックで辿れる
+
+merge → worktree 片付け → Issue close は段階 5（[`5_merge_and_cleanup.md`](5_merge_and_cleanup.md)）の所掌。

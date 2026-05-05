@@ -25,10 +25,11 @@ PR を出す前に、**自分で自分の変更を厳しく読む** ことで、
 
 1. **テスト結果を最終確認する**
    ```bash
-   uv run pytest -x --cov=src --cov-report=term-missing
+   uv run pytest
    ```
+   （カバレッジは CI 側で計測される。手元で確認したい場合のみ `uv run pytest --cov=src --cov-report=term-missing` を別途走らせる）
    - 全テストが green であることを確認
-   - カバレッジの抜けが計画の想定と合致するか確認（計画で挙げたテスト観点が本当に実装されているか）
+   - 計画で挙げたテスト観点が本当に実装されているか（`git log develop..HEAD --oneline | grep test:`）
 2. **`git diff develop..HEAD` を読み直す**
    - 他人の目で差分を読む。5 分休憩してから読むと発見が増える
    - 自分のコミットメッセージで、変更の意図が追えるか確認
@@ -89,6 +90,17 @@ PR を出す前に、**自分で自分の変更を厳しく読む** ことで、
 - **範囲を広げない**。無関係なリファクタは別 Issue に分ける。この段階で PR が肥大化すると、誰もレビューできなくなる
 - 実験結果が想定と違うときほど、**結果を書き換えずに解釈を書く**。失敗も記録対象
 - 可読性の修正は、テストのない箇所で暴れない。テストがないなら先にテストを足してから直す
+
+## independent reviewer agent への委譲（auto_run_issue から呼ばれる場合）
+
+実装者と独立した sub-agent にレビューさせると、実装者が見落とした観点を拾える。
+プロンプトは [`subagent_prompt_template.md`](subagent_prompt_template.md) の **reviewer 用雛形** を使う。
+
+reviewer agent は `git diff develop..HEAD` と Issue 本文・plan を入力に、レビューサマリだけを Issue コメントに投稿する。
+**本体コードは触らない**（`src/` も `tests/` も書き換えない）。
+出力は本 skill §「GitHub Issue に残すべきレビューサマリ」と同じ構成 + 「Critical 指摘の有無」を加えた形で Issue コメントに投稿する。
+
+[`auto_run_issue.md`](auto_run_issue.md) §4 の DoD は「Issue コメントに `## レビューサマリ` あり」で、これが reviewer agent の出力に対応する。
 
 ## リファクタリング方針の判断基準
 

@@ -16,8 +16,8 @@ description: 段階 1 で固めた計画に基づいて TDD で実装を進め�
 
 ## 入力
 
-- 対象 Issue 番号と計画（Issue コメント または `docs/plans/issue-<番号>.md`）
-- 作成済みの worktree / feature ブランチ
+- 対象 Issue 番号と計画（Issue コメント、[`1_issue_plan.md`](1_issue_plan.md) で投稿済み）
+- 作成済みの worktree / feature ブランチ（親セッションが [`pm_sop.md`](pm_sop.md) / [`auto_run_issue.md`](auto_run_issue.md) §1 に従って用意）
 
 ## 実施手順
 
@@ -60,14 +60,7 @@ description: 段階 1 で固めた計画に基づいて TDD で実装を進め�
 ## 完了条件
 
 - [ ] 計画で挙げたテスト観点のうち、必須項目がすべてテストとして存在する
-- [ ] CI と同一の以下 4 コマンドを **すべて引数なし** で走らせて green（詳細: [`docs/rules/ci-parity.md`](../../docs/rules/ci-parity.md)）
-  ```bash
-  uv run ruff check .
-  uv run ruff format --check .
-  uv run pyright
-  uv run pytest
-  ```
-  - `uv run pyright src/` のような部分検査で済ませるのは **不可**（tests 側の型エラーを見落とす。PR #17 / #18 の再発防止）
+- [ ] [`docs/rules/ci-parity.md`](../../docs/rules/ci-parity.md) §2 の 4 コマンドを **すべて引数なし** で走らせて green。`uv run pyright src/` のような部分検査で済ませるのは **不可**（PR #17 / #18 の再発防止理由は `ci-parity.md` §1 参照）
 - [ ] 実験を行った場合、seed と設定が再現可能な形で保存されている
 - [ ] 実験結果は Markdown レポート化されている（HTML 化は段階 3 以降でも可）
 - [ ] 各 TDD サイクルが **`test:` コミットと `feat:` コミットに分離** されている（詳細は下の「コミット単位」節）
@@ -113,6 +106,12 @@ feat: implement PopulationArrays.from_households with tests (refs #13)   # NG: t
 
 各コミット前に `uv run pyright`（引数なし、src+tests 両方）を少なくとも 1 度走らせる。
 `uv run pyright src/` で済ませると、tests 側で Literal 外の値を渡すテストや pytest.approx の型不明が見逃される（PR #17 で実際に発生）。
+
+## sub-agent に委譲する場合
+
+親セッションが本 skill に基づいて sub-agent を起動するときは、[`subagent_prompt_template.md`](subagent_prompt_template.md) の **implementer 用雛形** を使う。
+sub-agent には本ファイルを Read させ、依存 PR の merged commit hash と使える API を A〜E の必須要素として明示する。
+プロンプト不備で起きた事故（PR #17/#18 の `pyright src/` 部分検査、Issue #27/#29 の self-stall timeout）の再発防止が本雛形の目的。
 
 ## GitHub Issue に追記すべきこと（実装中）
 
