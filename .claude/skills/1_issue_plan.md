@@ -1,6 +1,6 @@
 ---
 name: 1_issue_plan
-description: 実装に入る前に、設計方針・実装方針・テスト観点・実験計画・リスク・worktree 作成までを Issue に書き切る。
+description: 実装に入る前に、設計方針・実装方針・テスト観点・実験計画・リスクを Issue コメントに書き切る。
 ---
 
 # SKILL: 1_issue_plan — 実装前の計画を固める
@@ -46,29 +46,26 @@ description: 実装に入る前に、設計方針・実装方針・テスト観�
 6. **リスクと代替案を書く**
    - 想定される失敗モード（実装・計算・解釈）
    - Plan B（途中で切り替える条件）
-7. **worktree / branch を作成する**
-   詳細は [`docs/rules/git-worktree.md`](../../docs/rules/git-worktree.md)。
-   コマンド例:
-   ```bash
-   cd <repo_root>
-   git worktree add -b feature/<issue番号>-<keyword> gitworktree/feature-<issue番号>-<keyword> develop
-   cd gitworktree/feature-<issue番号>-<keyword>
-   ```
-8. **Issue コメントとして計画を貼る**
+7. **Issue コメントとして計画を貼る**
    雛形: [`docs/templates/issue_plan.md`](../../docs/templates/issue_plan.md)。
-   長大な場合は `docs/plans/issue-<番号>.md` にファイルとして追加し、Issue にはリンクを貼る。
+   `gh issue comment <N> --body "$(cat <<'EOF' ... EOF)"` で投稿する。
+
+> **注記**: worktree / branch 作成は本 skill の所掌から外れた。
+> [`pm_sop.md`](pm_sop.md) §「親セッションの責務」と [`auto_run_issue.md`](auto_run_issue.md) §1（worktree 作成）が担当する。
+> plan を書く時点で worktree は親セッション側で既に用意されている前提で良い。
+
+> **注記**: `docs/plans/issue-<番号>.md` への外出し選択肢は撤廃された（**Issue コメントに統一**）。
+> Issue コメントに収まらないほど長大な計画になる場合は、Issue 自体を分割する候補と考える。
 
 ## 出力物
 
-- Issue コメント（または `docs/plans/issue-<番号>.md`）に計画を記録
-- `gitworktree/feature-<issue番号>-<keyword>/` と対応ブランチ
+- Issue コメントに計画を記録（`gh issue comment <N> --body ...`）
 
 ## 完了条件
 
 - [ ] 設計方針・実装方針・テスト観点・実験計画・リスクの 5 項目が揃っている
 - [ ] 成功条件が「どのテストが通ればよいか」まで落ちている
-- [ ] 計画が Issue に紐付いた形で参照可能
-- [ ] worktree が作成済みで、ブランチが `develop` 起点になっている
+- [ ] 計画が Issue コメントとして参照可能
 
 ## 注意点
 
@@ -100,4 +97,4 @@ description: 実装に入る前に、設計方針・実装方針・テスト観�
 - [ ] テスト観点（レイヤ別に）
 - [ ] 実験計画（仮説・条件・指標・判定）
 - [ ] リスクと代替案
-- [ ] 作成した worktree / branch 名
+- [ ] 親セッションが用意した worktree / branch 名（参考情報として）

@@ -26,19 +26,27 @@
 
 ---
 
-## 3. 標準フロー（0〜4）
+## 3. 標準フロー（0〜5）
 
-1 つの Issue は必ず次の 5 段階を通ります。各段階は `.claude/skills/` に対応する skill があり、Claude Code 上で `/0_issue_create` のように呼び出せます。
+1 つの Issue は必ず次の 6 段階を通ります。各段階は `.claude/skills/` に対応する skill があり、Claude Code 上で `/0_issue_create` のように呼び出せます。
 
 | # | 段階 | 目的 | 主な出力 |
 |---|---|---|---|
 | 0 | `0_issue_create` | 価値起点で Issue を作る | GitHub Issue 本文 |
-| 1 | `1_issue_plan` | 実装前に設計・テスト・実験計画を固める | Issue コメント or `docs/plans/` への計画メモ |
+| 1 | `1_issue_plan` | 実装前に設計・テスト・実験計画を固める | Issue コメント（計画メモ） |
 | 2 | `2_issue_impl` | TDD で小さく実装する | コード + テスト + コミット列 |
-| 3 | `3_review_and_refactor` | 自己レビューと整理 | Issue コメント（レビューサマリ）、必要ならリファクタ差分 |
-| 4 | `4_create_pr` | `develop` 向け PR を作る | PR 本文 + レビュー依頼 |
+| 3 | `3_review_and_refactor` | 自己レビュー or independent reviewer agent によるレビュー | Issue コメント（レビューサマリ） |
+| 4 | `4_create_pr` | `develop` 向け PR 作成・Ready 化 | PR + レビュー依頼 |
+| 5 | `5_merge_and_cleanup` | merge → worktree 片付け → Issue close | merged PR、片付け済 worktree |
 
 段階を飛ばさないでください。「Issue を立てずに branch を切る」「plan を書かずに実装する」は禁止です。
+
+## 3.1 自律走破モード（auto_run_issue）
+
+`/auto_run_issue <タイトル or Issue#>` で 0→5 を 1 コマンド自律走破できます。
+各段階の記録は Issue コメントとして残るので、ユーザーは事後に追えます。
+
+詳細は [`.claude/skills/auto_run_issue.md`](.claude/skills/auto_run_issue.md)、親セッションの行動規範は [`.claude/skills/pm_sop.md`](.claude/skills/pm_sop.md)、sub-agent への委譲雛形は [`.claude/skills/subagent_prompt_template.md`](.claude/skills/subagent_prompt_template.md) を参照してください。
 
 ---
 
@@ -119,4 +127,7 @@ Claude Code は、これらを満たさない状態で作業を終えないこ�
 | 実験レポート雛形 | [`docs/templates/experiment_report.md`](docs/templates/experiment_report.md) |
 | レビューサマリ雛形 | [`docs/templates/review_summary.md`](docs/templates/review_summary.md) |
 | 標準フロー skill | [`.claude/skills/`](.claude/skills/) |
-| マルチエージェント運用 | [`.claude/skills/multi_agent_orchestration.md`](.claude/skills/multi_agent_orchestration.md) |
+| 自律走破オーケストレータ | [`.claude/skills/auto_run_issue.md`](.claude/skills/auto_run_issue.md) |
+| 親セッション行動規範 | [`.claude/skills/pm_sop.md`](.claude/skills/pm_sop.md) |
+| sub-agent プロンプト雛形 | [`.claude/skills/subagent_prompt_template.md`](.claude/skills/subagent_prompt_template.md) |
+| merge と片付け | [`.claude/skills/5_merge_and_cleanup.md`](.claude/skills/5_merge_and_cleanup.md) |
