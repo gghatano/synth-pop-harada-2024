@@ -6,10 +6,21 @@
 
 from __future__ import annotations
 
+import shutil
 import subprocess
 from pathlib import Path
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
+
+# `make` が無い環境（例: 素の Windows）では Makefile ターゲットの dry-run が
+# できないため、モジュール全体を skip する。CI（Linux）には make があるので
+# 実質的なカバレッジは失われない。
+pytestmark = pytest.mark.skipif(
+    shutil.which("make") is None,
+    reason="`make` executable not available on this platform",
+)
 
 
 def _make_dry_run(target: str) -> tuple[int, str]:
