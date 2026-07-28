@@ -15,7 +15,6 @@ import argparse
 import json
 import subprocess
 import sys
-from pathlib import Path
 from typing import Any
 
 # ---------------------------------------------------------------------------
@@ -67,7 +66,11 @@ def branch_to_worktree_path(branch_name: str, repo_root: str) -> str | None:
         return None
     # feature/48-merge-pr-helper → feature-48-merge-pr-helper
     worktree_dir_name = branch_name.replace("/", "-", 1)
-    return str(Path(repo_root) / "gitworktree" / worktree_dir_name)
+    # worktree パスは git 規約に合わせて常に "/" 区切りにする。
+    # Path(...) を使うと Windows で "\\" 区切りになり、git worktree remove に
+    # 渡す文字列や後段の比較が OS 依存になるため、明示的にスラッシュで結合する。
+    normalized_root = repo_root.replace("\\", "/").rstrip("/")
+    return f"{normalized_root}/gitworktree/{worktree_dir_name}"
 
 
 # ---------------------------------------------------------------------------

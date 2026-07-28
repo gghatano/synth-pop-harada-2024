@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>論文再現の敵対的検証とクロスプラットフォーム課題の修正</title>
+<style>
+*,*::before,*::after{box-sizing:border-box}
+body{font-family:"Hiragino Kaku Gothic ProN","Hiragino Sans",Meiryo,"Noto Sans CJK JP",sans-serif;
+font-size:1.1rem;line-height:1.8;color:#1a1a1a;background:#f4f6f8;margin:0;padding:0}
+.container{max-width:960px;margin:0 auto;padding:2rem 1.5rem}
+.report-header{background:#1a3a5c;color:#fff;padding:2rem 1.5rem;margin-bottom:1.5rem;border-radius:8px}
+.report-header h1{font-size:1.55rem;margin:0 0 .6rem;font-weight:700;line-height:1.5}
+.report-header .meta{font-size:.9rem;opacity:.9}
+.report-header .meta code{background:rgba(255,255,255,.15);padding:.05rem .35rem;border-radius:4px}
+h2{font-size:1.25rem;color:#1a3a5c;border-bottom:2px solid #cfd8e3;padding-bottom:.3rem;margin-top:2.2rem}
+h3{font-size:1.08rem;color:#28527a;margin-top:1.6rem}
+.summary{background:#fff7dd;border-left:6px solid #e6b800;padding:1.2rem 1.4rem;border-radius:6px;
+font-weight:600;margin-bottom:1rem}
+.summary p{margin:.35rem 0}
+table{border-collapse:collapse;width:100%;margin:1rem 0;background:#fff;border-radius:6px;overflow:hidden;
+box-shadow:0 1px 3px rgba(0,0,0,.08);font-size:.98rem}
+th,td{border:1px solid #dde3ea;padding:.55rem .8rem;text-align:left;vertical-align:top}
+th{background:#eef2f7;font-weight:700;color:#28527a}
+tbody tr:nth-child(even){background:#fafbfc}
+.pass{color:#1a7a34;font-weight:700}
+.fail{color:#c0392b;font-weight:700}
+code{font-family:"SFMono-Regular",Consolas,Menlo,monospace;background:#eceff3;padding:.05rem .35rem;border-radius:4px;font-size:.92em}
+pre{background:#1e2733;color:#e6edf3;padding:1rem 1.2rem;border-radius:8px;overflow-x:auto;font-size:.86rem;line-height:1.6}
+pre code{background:none;color:inherit;padding:0}
+ul{padding-left:1.3rem}
+.badge{display:inline-block;background:#1a7a34;color:#fff;font-size:.8rem;font-weight:700;
+padding:.15rem .6rem;border-radius:999px;margin-left:.4rem}
+footer{margin-top:2.5rem;padding-top:1rem;border-top:1px solid #cfd8e3;font-size:.85rem;color:#667}
+</style>
+</head>
+<body>
+<div class="container">
+
+<div class="report-header">
+<h1>論文再現の敵対的検証とクロスプラットフォーム課題の修正</h1>
+<div class="meta">
+日付: 2026-07-29 ｜ ブランチ: <code>feature/windows-portability</code> ｜ コミット: <code>6228b7f</code><br>
+環境: Windows 11 / Python 3.12 (uv) / pytest 8 ｜ Issue: 未起票（探索的検証セッション）
+</div>
+</div>
+
+<div class="summary">
+<p>論文の実験結果（合成人口を作る手法の再現）が「本当に正しく再現できているか」を、結果を疑う立場から検証しました。</p>
+<p>4つの再現実験はすべて合格し、生成データは基準値と1バイトも違わず完全一致しました（近いだけではなく厳密に一致）。</p>
+<p>一方で、検証をリポジトリ全体に広げると、Windows 環境でテスト11件が失敗していることを発見しました。</p>
+<p>原因はWindowsとLinuxのファイルパスの違いなど「動く環境が限られる」不具合で、3点を修正し全テストを合格（0失敗）にしました。</p>
+<p>論文再現の数値には一切影響していません。</p>
+</div>
+
+<h2>2. 技術詳細</h2>
+
+<h3>2.1 論文再現（paper_results 全4実験）</h3>
+<p>固定 seed で 4 実験を実行し、コミット済みの期待値CSVと許容幅（best_score ±1% / utility ±5%）で照合した。</p>
+<table>
+<thead><tr><th>実験</th><th>内容</th><th>tolerance判定</th></tr></thead>
+<tbody>
+<tr><td>exp01</td><td>age-change vs age-swap</td><td class="pass">PASS</td></tr>
+<tr><td>exp02</td><td>hybrid 戦略比較</td><td class="pass">PASS</td></tr>
+<tr><td>exp03</td><td>改善ループ3戦略（rule_based / pareto / random_search）</td><td class="pass">PASS</td></tr>
+<tr><td>exp04</td><td>複数候補ばらつき（CV + bootstrap 95% CI）</td><td class="pass">PASS</td></tr>
+</tbody>
+</table>
+
+<h3>2.2 敵対的検証（"PASS を疑う"）</h3>
+<table>
+<thead><tr><th>疑い</th><th>検証方法</th><th>結果</th></tr></thead>
+<tbody>
+<tr><td>tolerance が実質ザルでは</td><td>実装読解（構造・文字列一致・相対差分）</td><td>妥当。ザルではない</td></tr>
+<tr><td>今の結果を自己比較して常時PASSでは</td><td>run.py 読解</td><td>比較対象はコミット済み <code>expected/</code>、生成物は gitignore の <code>outputs/</code>。自己比較ではない</td></tr>
+<tr><td>基準を実行が汚したのでは</td><td><code>git status</code></td><td>クリーン。<code>expected/</code> 無改変</td></tr>
+<tr><td>チェックは本当にFAILできるか</td><td>453→500（10%ずれ）に改竄した入力を投入</td><td class="fail">FAIL 検出・exit 1 を確認</td></tr>
+<tr><td>「±1%以内」で近いだけでは</td><td>生成物と <code>expected/</code> を <code>diff</code></td><td>全ファイル <strong>バイト完全一致（0%差）</strong></td></tr>
+<tr><td>期待値ファイルの黙殺は</td><td>expected/ と outputs/ のファイル集合を突合</td><td>全ファイル比較済み。黙殺なし</td></tr>
+</tbody>
+</table>
+
+<h3>2.3 発見・修正した課題</h3>
+<p>CI parity（lint / format / type / test）をリポジトリ全体に流したところ、pytest で 11 件失敗。</p>
+<table>
+<thead><tr><th>課題</th><th>種別</th><th>修正</th></tr></thead>
+<tbody>
+<tr><td><code>merge_pr.branch_to_worktree_path</code> が Windows で <code>\</code> 区切りを返し、<code>git worktree remove</code> 用の値が OS 依存（3件失敗）</td><td>実コードの移植性バグ</td><td><code>/</code> 区切り明示結合＋バックスラッシュ正規化。未使用 <code>Path</code> import 除去</td></tr>
+<tr><td><code>test_make_targets.py</code> が <code>make</code> 未導入環境で <code>FileNotFoundError</code>（7件失敗）</td><td>テストの移植性</td><td><code>shutil.which("make")</code> で skip 判定。CI(Linux) では従来通り実行</td></tr>
+<tr><td><code>py.typed</code> 未同梱で pyright 警告377件</td><td>パッケージング漏れ</td><td>PEP 561 マーカー追加。wheel 同梱をビルドで実証</td></tr>
+</tbody>
+</table>
+
+<h3>2.4 対応後の検証結果 <span class="badge">0 failed</span></h3>
+<table>
+<thead><tr><th>項目</th><th>修正前</th><th>修正後</th></tr></thead>
+<tbody>
+<tr><td>pytest</td><td>776 passed / <span class="fail">11 failed</span> / 10 skipped</td><td><span class="pass">779 passed / 0 failed</span> / 18 skipped</td></tr>
+<tr><td>ruff check / format</td><td>クリーン</td><td>クリーン</td></tr>
+<tr><td>pyright</td><td>0 errors / 377 warnings</td><td>0 errors / <strong>19 warnings</strong>（残は外部ライブラリ由来）</td></tr>
+<tr><td>paper_results 4実験</td><td class="pass">PASS</td><td class="pass">PASS（影響なし）</td></tr>
+</tbody>
+</table>
+
+<h2>3. 解釈</h2>
+<p>論文再現の主張は「決定的（deterministic）かつバイト単位で再現可能」という強い形で裏付けられた。tolerance チェックは改竄入力を正しく FAIL させるため、合否判定の信頼性も確認できた。発見した課題はいずれも「Windows で動かすと顕在化する移植性の問題」であり、生成・評価アルゴリズム本体の正しさとは独立している。</p>
+
+<h2>4. 制約</h2>
+<ul>
+<li>検証は CI 既定設定（100世帯 / 3 seed / 2水準）に対するもの。フル設定（1000世帯）は別途 <code>--full</code> で要検証。</li>
+<li>Windows 環境1台での実測。macOS 等での再検証は未実施。</li>
+<li>pyright 残19警告は pandas / scipy / plotly のスタブ欠如で当リポジトリでは解消不能。</li>
+<li>本セッションはIssue未起票の探索的検証で、リポジトリ規約（Issue駆動・worktree・TDD）の一部を省略している。</li>
+</ul>
+
+<h2>5. 再現手順</h2>
+<pre><code>uv sync --frozen --all-groups
+
+# 論文再現（全4実験、固定seed）
+PYTHONPATH=. uv run python paper_results/experiment-01-age-change-vs-age-swap/run.py --check-tolerance
+PYTHONPATH=. uv run python paper_results/experiment-02-hybrid-strategy/run.py --check-tolerance
+PYTHONPATH=. uv run python paper_results/experiment-03-improve-strategy-comparison/run.py --check-tolerance
+PYTHONPATH=. uv run python paper_results/experiment-04-multi-trial-variance/run.py --check-tolerance
+
+# 敵対的検証: tolerance が改竄を FAIL させるか
+cp paper_results/experiment-01-age-change-vs-age-swap/expected/best_scores.csv /tmp/t.csv
+sed -i 's/,453.0/,500.0/g' /tmp/t.csv
+PYTHONPATH=. uv run python -m paper_results._shared.tolerance_check /tmp/t.csv \
+  paper_results/experiment-01-age-change-vs-age-swap/expected/best_scores.csv   # -> exit 1
+
+# CI parity
+uv run ruff check . && uv run ruff format --check . && uv run pyright && uv run pytest -n auto -q</code></pre>
+
+<h2>6. 次に見るべき論点</h2>
+<ul>
+<li><code>--full</code>（1000世帯）設定での再現一致確認（別タイムスロット）。</li>
+<li>mkdocs の壊れた相対リンク警告（docs_dir 外参照）の整理 — 本セッションではスコープ外として見送り。</li>
+<li>quickstart の Windows コンソール文字化け（cp932 表示アーティファクト。データ自体は正しい UTF-8）。</li>
+<li>本修正の正式取り込み: Issue 起票 → develop 向け PR 化。</li>
+</ul>
+
+<footer>
+synthpop-jp 実験レポート ｜ 自動保存物（<code>report.md</code> を変換）｜ 外部依存ゼロの self-contained HTML
+</footer>
+
+</div>
+</body>
+</html>
